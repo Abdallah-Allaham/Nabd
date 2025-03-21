@@ -47,5 +47,7 @@
 	<true/>
 	<key>NSFaceIDUsageDescription</key>
     <string>Why is my app authenticating using face id?</string>
+    <key>NSMicrophoneUsageDescription</key>
+    <string>We need to access your microphone for speech-to-text functionality</string>
 </dict>
 </plist>
