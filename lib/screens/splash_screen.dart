@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:animate_do/animate_do.dart';
+import 'package:nabd/services/tts_service.dart';
 import 'package:nabd/widgets/avatar.dart';
 import 'login_screen.dart';
 
@@ -14,10 +15,12 @@ class _SplashScreenState extends State<SplashScreen> {
   bool _isExiting = false;
   bool _showAnimation = false; // متغير للتحكم في الأنيميشن
 
+  TTSService _ttsService = TTSService();
+
   @override
   void initState() {
     super.initState();
-
+    initializeTTS();
     // تشغيل الأنيميشن بعد تحميل الصفحة
     WidgetsBinding.instance.addPostFrameCallback((_) {
       setState(() {
@@ -49,6 +52,17 @@ class _SplashScreenState extends State<SplashScreen> {
         );
       });
     });
+  }
+
+  Future<void> initializeTTS() async{
+    await _ttsService.initialize();
+    await _ttsService.speak('مرحبا بك في نبضْ');
+  }
+
+  @override
+  void dispose() {
+    _ttsService.stop();
+    super.dispose();
   }
 
   @override
