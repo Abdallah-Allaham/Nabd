@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:local_auth/local_auth.dart';
 import 'package:flutter/services.dart';
 import 'package:nabd/screens/main_screen.dart';
+import 'package:nabd/screens/signup_screen.dart';
 import 'package:nabd/widgets/avatar.dart';
 
 class LoginScreen extends StatefulWidget {
@@ -81,7 +82,7 @@ class _LoginScreenState extends State<LoginScreen> {
           if (mounted) {
             Navigator.pushReplacement(
               context,
-              MaterialPageRoute(builder: (context) => MainScreen()),
+              MaterialPageRoute(builder: (context) => SignupScreen()),
             );
           }
         });

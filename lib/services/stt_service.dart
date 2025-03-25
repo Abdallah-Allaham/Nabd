@@ -2,8 +2,10 @@ import 'package:speech_to_text/speech_to_text.dart' as stt;
 
 class STTService {
   final stt.SpeechToText _speech = stt.SpeechToText();
-  bool _speechEnabled = false; // رجعت الاسم لـ _speechEnabled عشان يكون أوضح
+  bool _speechEnabled = false;
   String _lastWords = '';
+
+  String get lastWords => _lastWords;
 
   Future<bool> initSpeech() async {
     _speechEnabled = await _speech.initialize();
@@ -28,5 +30,9 @@ class STTService {
     await _speech.stop();
   }
 
-  String get lastWords => _lastWords;
+  // دالة جديدة لمسح الرد القديم
+  void clearLastWords() {
+    _lastWords = '';
+  }
+
 }
