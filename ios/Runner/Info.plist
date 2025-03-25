@@ -49,5 +49,10 @@
     <string>Why is my app authenticating using face id?</string>
     <key>NSMicrophoneUsageDescription</key>
     <string>We need to access your microphone for speech-to-text functionality</string>
+    <key>NSAppTransportSecurity</key>
+    <dict>
+      <key>NSAllowsArbitraryLoads</key>
+      <true/>
+    </dict>
 </dict>
 </plist>
