@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:local_auth/local_auth.dart';
 import 'package:nabd/services/stt_service.dart';
 import 'package:nabd/services/tts_service.dart';
+import 'package:nabd/screens/main_screen.dart';
 
 class SignupScreen extends StatelessWidget {
   const SignupScreen({super.key});
@@ -14,7 +15,7 @@ class SignupScreen extends StatelessWidget {
           gradient: LinearGradient(
             begin: Alignment.topLeft,
             end: Alignment.bottomRight,
-            colors: [Color(0xFF1A237E), Color(0xFF3F51B5)],
+            colors: [Color.fromARGB(255, 0, 9, 112), Color.fromARGB(255, 14, 19, 53)],
           ),
         ),
         child: const Center(child: RegistrationSteps()),
@@ -40,8 +41,7 @@ class _RegistrationStepsState extends State<RegistrationSteps> {
   String _phoneNumber = '';
   String _name = '';
   String _guardianPhoneNumber = '';
-  bool _isListening = false;
-  bool _registrationCompleted = false; // متغير لتحديد انتهاء التسجيل
+  bool _registrationCompleted = false;
 
   @override
   void initState() {
@@ -60,8 +60,7 @@ class _RegistrationStepsState extends State<RegistrationSteps> {
       _currentStep = stepIndex;
     });
 
-    if (_registrationCompleted)
-      return; // إذا كان التسجيل انتهى لا تعيد الاستماع
+    if (_registrationCompleted) return;
 
     _sttService.clearLastWords();
 
@@ -122,15 +121,7 @@ class _RegistrationStepsState extends State<RegistrationSteps> {
   Future<void> _listenForPhoneNumber() async {
     _phoneNumber = await _waitForSpeechResult();
     if (_phoneNumber.isNotEmpty) {
-      // if (_phoneNumber.length == 5 &&
-      //     (_phoneNumber.startsWith('079') ||
-      //         _phoneNumber.startsWith('078') ||
-      //         _phoneNumber.startsWith('077'))) {
-        _startStep(2);
-      // } else {
-      //   await _ttsService.speak('لم أسمع رقم الهاتف، يرجى المحاولة مرة أخرى');
-      //   await _listenForPhoneNumber();
-      // }
+      _startStep(2);
     } else {
       await _ttsService.speak('لم أسمع رقم الهاتف، يرجى المحاولة مرة أخرى');
       await _listenForPhoneNumber();
@@ -150,10 +141,15 @@ class _RegistrationStepsState extends State<RegistrationSteps> {
   Future<void> _listenForGuardianPhoneNumber() async {
     _guardianPhoneNumber = await _waitForSpeechResult();
     if (_guardianPhoneNumber.isNotEmpty) {
-      await _ttsService.speak('تم التسجيل بنجاح');
+      await _ttsService.speak('تم التسجيل بنجاح، سيتم نقلك إلى الصفحة الرئيسية');
       setState(() {
-        _registrationCompleted = true; // انهاء عملية التسجيل
+        _registrationCompleted = true;
       });
+      if (mounted) {
+        Navigator.of(context).pushReplacement(
+          MaterialPageRoute(builder: (context) => const MainScreen()),
+        );
+      }
     } else {
       await _ttsService.speak(
         'لم أسمع رقم هاتف المسؤول، يرجى المحاولة مرة أخرى',
@@ -212,10 +208,9 @@ class _RegistrationStepsState extends State<RegistrationSteps> {
             style: const TextStyle(color: Colors.white),
           ),
           isActive: _currentStep >= 0,
-          state:
-              _isFingerprintAuthenticated
-                  ? StepState.complete
-                  : StepState.indexed,
+          state: _isFingerprintAuthenticated
+              ? StepState.complete
+              : StepState.indexed,
         ),
         Step(
           title: const Text(
@@ -251,10 +246,9 @@ class _RegistrationStepsState extends State<RegistrationSteps> {
             style: const TextStyle(color: Colors.white),
           ),
           isActive: _currentStep >= 3,
-          state:
-              _guardianPhoneNumber.isNotEmpty
-                  ? StepState.complete
-                  : StepState.indexed,
+          state: _guardianPhoneNumber.isNotEmpty
+              ? StepState.complete
+              : StepState.indexed,
         ),
       ],
     );
