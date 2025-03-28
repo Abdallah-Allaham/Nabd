@@ -3,6 +3,8 @@ import 'package:local_auth/local_auth.dart';
 import 'package:nabd/services/stt_service.dart';
 import 'package:nabd/services/tts_service.dart';
 import 'package:nabd/screens/main_screen.dart';
+import 'package:nabd/utils/const_value.dart';
+import 'package:nabd/widgets/avatar.dart';
 
 class SignupScreen extends StatelessWidget {
   const SignupScreen({super.key});
@@ -11,14 +13,22 @@ class SignupScreen extends StatelessWidget {
   Widget build(BuildContext context) {
     return Scaffold(
       body: Container(
-        decoration: const BoxDecoration(
+        decoration: BoxDecoration(
           gradient: LinearGradient(
             begin: Alignment.topLeft,
             end: Alignment.bottomRight,
-            colors: [Color.fromARGB(255, 0, 9, 112), Color.fromARGB(255, 14, 19, 53)],
+            colors: [ConstValue.color1, ConstValue.color2],
           ),
         ),
-        child: const Center(child: RegistrationSteps()),
+        child: Center(
+          child: Column(
+            mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+            children: [
+              RegistrationSteps(),
+              Avatar(size: 100),
+            ],
+          ),
+        ),
       ),
     );
   }
@@ -141,7 +151,9 @@ class _RegistrationStepsState extends State<RegistrationSteps> {
   Future<void> _listenForGuardianPhoneNumber() async {
     _guardianPhoneNumber = await _waitForSpeechResult();
     if (_guardianPhoneNumber.isNotEmpty) {
-      await _ttsService.speak('تم التسجيل بنجاح، سيتم نقلك إلى الصفحة الرئيسية');
+      await _ttsService.speak(
+        'تم التسجيل بنجاح، سيتم نقلك إلى الصفحة الرئيسية',
+      );
       setState(() {
         _registrationCompleted = true;
       });
@@ -208,9 +220,10 @@ class _RegistrationStepsState extends State<RegistrationSteps> {
             style: const TextStyle(color: Colors.white),
           ),
           isActive: _currentStep >= 0,
-          state: _isFingerprintAuthenticated
-              ? StepState.complete
-              : StepState.indexed,
+          state:
+              _isFingerprintAuthenticated
+                  ? StepState.complete
+                  : StepState.indexed,
         ),
         Step(
           title: const Text(
@@ -246,9 +259,10 @@ class _RegistrationStepsState extends State<RegistrationSteps> {
             style: const TextStyle(color: Colors.white),
           ),
           isActive: _currentStep >= 3,
-          state: _guardianPhoneNumber.isNotEmpty
-              ? StepState.complete
-              : StepState.indexed,
+          state:
+              _guardianPhoneNumber.isNotEmpty
+                  ? StepState.complete
+                  : StepState.indexed,
         ),
       ],
     );

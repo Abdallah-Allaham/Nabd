@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:animate_do/animate_do.dart';
 import 'package:nabd/services/tts_service.dart';
+import 'package:nabd/utils/const_value.dart';
 import 'package:nabd/widgets/avatar.dart';
 import 'login_screen.dart';
 
@@ -39,13 +40,15 @@ class _SplashScreenState extends State<SplashScreen> {
         Navigator.pushReplacement(
           context,
           PageRouteBuilder(
-            pageBuilder: (context, animation, secondaryAnimation) =>
-            const LoginScreen(),
-            transitionsBuilder: (context, animation, secondaryAnimation, child) {
-              return FadeTransition(
-                opacity: animation,
-                child: child,
-              );
+            pageBuilder:
+                (context, animation, secondaryAnimation) => const LoginScreen(),
+            transitionsBuilder: (
+              context,
+              animation,
+              secondaryAnimation,
+              child,
+            ) {
+              return FadeTransition(opacity: animation, child: child);
             },
             transitionDuration: const Duration(milliseconds: 500),
           ),
@@ -54,7 +57,7 @@ class _SplashScreenState extends State<SplashScreen> {
     });
   }
 
-  Future<void> initializeTTS() async{
+  Future<void> initializeTTS() async {
     await _ttsService.initialize();
     await _ttsService.speak('مرحبا بك في نبضْ');
   }
@@ -69,14 +72,11 @@ class _SplashScreenState extends State<SplashScreen> {
   Widget build(BuildContext context) {
     return Scaffold(
       body: Container(
-        decoration: const BoxDecoration(
+        decoration: BoxDecoration(
           gradient: LinearGradient(
             begin: Alignment.topCenter,
             end: Alignment.bottomCenter,
-            colors: [
-              Color(0xFF1A237E),
-              Color(0xFF3F51B5),
-            ],
+            colors: [ConstValue.color1, ConstValue.color2],
           ),
         ),
         child: Center(

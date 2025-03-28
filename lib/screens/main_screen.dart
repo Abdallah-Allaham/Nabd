@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:convex_bottom_bar/convex_bottom_bar.dart';
-import 'home_page.dart'; // تأكد من أن المسار صحيح
+import 'home_screen.dart'; // تأكد من أن المسار صحيح
 
 class MainScreen extends StatefulWidget {
   const MainScreen({Key? key}) : super(key: key);
@@ -13,7 +13,7 @@ class _MainScreenState extends State<MainScreen> {
   int _selectedIndex = 1;
   final List<Widget> _pages = [
     const Placeholder(), // Profile Page
-    const Home_Page(),   // Home Page
+    const HomeScreen(),   // Home Page
     const Placeholder(), // Settings Page
   ];
 
