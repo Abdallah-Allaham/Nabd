@@ -3,6 +3,7 @@ import 'package:local_auth/local_auth.dart';
 import 'package:flutter/services.dart';
 import 'package:nabd/screens/main_screen.dart';
 import 'package:nabd/screens/signup_screen.dart';
+import 'package:nabd/utils/const_value.dart';
 import 'package:nabd/widgets/avatar.dart';
 
 class LoginScreen extends StatefulWidget {
@@ -115,11 +116,11 @@ class _LoginScreenState extends State<LoginScreen> {
   Widget build(BuildContext context) {
     return Scaffold(
       body: Container(
-        decoration: const BoxDecoration(
+        decoration: BoxDecoration(
           gradient: LinearGradient(
             begin: Alignment.topCenter,
             end: Alignment.bottomCenter,
-            colors: [Color.fromARGB(255, 7, 13, 70), Color.fromARGB(255, 6, 10, 30)],
+            colors: [ConstValue.color1, ConstValue.color2],
           ),
         ),
         child: Stack(
