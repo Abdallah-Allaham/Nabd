@@ -5,6 +5,7 @@ import 'package:nabd/screens/main_screen.dart';
 import 'package:nabd/screens/signup_screen.dart';
 import 'package:nabd/utils/const_value.dart';
 import 'package:nabd/widgets/avatar.dart';
+import 'package:nabd/services/tts_service.dart';
 
 class LoginScreen extends StatefulWidget {
   const LoginScreen({super.key});
@@ -15,6 +16,7 @@ class LoginScreen extends StatefulWidget {
 
 class _LoginScreenState extends State<LoginScreen> {
   final LocalAuthentication _localAuth = LocalAuthentication();
+  final TTSService _ttsService = TTSService();
   bool _isAuthenticated = false;
   bool _isAuthenticating = false;
   bool _isBiometricSupported = false;
@@ -23,9 +25,9 @@ class _LoginScreenState extends State<LoginScreen> {
   void initState() {
     super.initState();
     _checkBiometricSupport();
+    _ttsService.initialize();
   }
 
-  // دالة للتحقق من دعم المصادقة البيومترية
   Future<void> _checkBiometricSupport() async {
     bool canCheckBiometrics = await _localAuth.canCheckBiometrics;
     bool isDeviceSupported = await _localAuth.isDeviceSupported();
@@ -33,15 +35,14 @@ class _LoginScreenState extends State<LoginScreen> {
       _isBiometricSupported = canCheckBiometrics && isDeviceSupported;
     });
 
-    // إذا كان الجهاز يدعم المصادقة البيومترية، ابدأ المصادقة تلقائيًا
     if (_isBiometricSupported) {
-      Future.delayed(const Duration(milliseconds: 500), () {
+      Future.delayed(const Duration(milliseconds: 500), () async {
         if (mounted) {
+          await _ttsService.speak("ابصم لتسجيل الدخول");
           _authenticate();
         }
       });
     } else {
-      // إذا ما كان يدعم المصادقة، انقل المستخدم مباشرة إلى الـ MainScreen
       Future.delayed(const Duration(seconds: 1), () {
         if (mounted) {
           Navigator.pushReplacement(
@@ -53,7 +54,6 @@ class _LoginScreenState extends State<LoginScreen> {
     }
   }
 
-  // دالة للمصادقة ببصمة الإصبع
   Future<void> _authenticate() async {
     if (_isAuthenticating || !_isBiometricSupported) return;
 
@@ -67,42 +67,30 @@ class _LoginScreenState extends State<LoginScreen> {
         options: const AuthenticationOptions(
           biometricOnly: true,
           stickyAuth: true,
-          useErrorDialogs: false, // تعطيل أي حوارات إضافية من التطبيق
+          useErrorDialogs: false,
         ),
       );
 
       if (!mounted) return;
 
-      setState(() {
-        _isAuthenticated = authenticated;
-      });
-
       if (authenticated) {
-        // الانتقال إلى الـ MainScreen بعد النجاح
+        setState(() {
+          _isAuthenticated = true;
+        });
+        await _ttsService.speak("تم");
         Future.delayed(const Duration(milliseconds: 500), () {
           if (mounted) {
             Navigator.pushReplacement(
               context,
-              MaterialPageRoute(builder: (context) => SignupScreen()),
+              MaterialPageRoute(builder: (context) => MainScreen()),
             );
           }
         });
       } else {
-        // إذا فشلت المصادقة، أعد المحاولة تلقائيًا
-        Future.delayed(const Duration(seconds: 1), () {
-          if (mounted) {
-            _authenticate();
-          }
-        });
+        _navigateToSignup();
       }
-    } on PlatformException catch (e) {
-      if (!mounted) return;
-      // إذا حصل خطأ، أعد المحاولة تلقائيًا
-      Future.delayed(const Duration(seconds: 1), () {
-        if (mounted) {
-          _authenticate();
-        }
-      });
+    } on PlatformException {
+      _navigateToSignup();
     } finally {
       if (mounted) {
         setState(() {
@@ -110,6 +98,18 @@ class _LoginScreenState extends State<LoginScreen> {
         });
       }
     }
+  }
+
+  void _navigateToSignup() async {
+    await _ttsService.speak("فشلت المصادقة، سيتم نقلك إلى صفحة التسجيل");
+    Future.delayed(const Duration(milliseconds: 500), () {
+      if (mounted) {
+        Navigator.pushReplacement(
+          context,
+          MaterialPageRoute(builder: (context) => SignupScreen()),
+        );
+      }
+    });
   }
 
   @override
@@ -123,12 +123,8 @@ class _LoginScreenState extends State<LoginScreen> {
             colors: [ConstValue.color1, ConstValue.color2],
           ),
         ),
-        child: Stack(
-          children: [
-            // الأفاتار في المنتصف
-            Center(child: Avatar(size: 100)),
-            // شلنا أيقونة البصمة والنص التوضيحي
-          ],
+        child: Center(
+          child: Avatar(size: 100),
         ),
       ),
     );
