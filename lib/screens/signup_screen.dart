@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:local_auth/local_auth.dart';
+import 'package:nabd/screens/login_screen.dart';
 import 'package:nabd/services/stt_service.dart';
 import 'package:nabd/services/tts_service.dart';
 import 'package:nabd/screens/main_screen.dart';
@@ -81,17 +82,17 @@ class _RegistrationStepsState extends State<RegistrationSteps> {
         _authenticateWithFingerprint();
         break;
       case 1:
-        await _ttsService.speak('يرجى قول رقم هاتفك');
+        await _ttsService.speak('يرجى إدخال رقم هاتفك');
         await Future.delayed(const Duration(milliseconds: 150));
         await _listenForPhoneNumber();
         break;
       case 2:
-        await _ttsService.speak('يرجى قول اسمك');
+        await _ttsService.speak('يرجى إدخال اسمك');
         await Future.delayed(const Duration(milliseconds: 150));
         await _listenForName();
         break;
       case 3:
-        await _ttsService.speak('يرجى قول رقم هاتف المسؤول عنك');
+        await _ttsService.speak('يرجى إدخال رقم هاتف المسؤول عنك');
         await Future.delayed(const Duration(milliseconds: 150));
         await _listenForGuardianPhoneNumber();
         break;
@@ -103,6 +104,12 @@ class _RegistrationStepsState extends State<RegistrationSteps> {
       bool canCheckBiometrics = await _localAuth.canCheckBiometrics;
       if (!canCheckBiometrics) {
         await _ttsService.speak('جهازك لا يدعم بصمة الإصبع');
+        return;
+      }
+
+      bool isDeviceSupported = await _localAuth.isDeviceSupported();
+      if (!isDeviceSupported) {
+        await _ttsService.speak('البصمة غير مدعومة أو تم تعطيلها');
         return;
       }
 
@@ -125,6 +132,7 @@ class _RegistrationStepsState extends State<RegistrationSteps> {
       }
     } catch (e) {
       print('Error in fingerprint authentication: $e');
+      await _ttsService.speak('حدث خطأ في المصادقة، يرجى المحاولة لاحقًا');
     }
   }
 
@@ -152,14 +160,14 @@ class _RegistrationStepsState extends State<RegistrationSteps> {
     _guardianPhoneNumber = await _waitForSpeechResult();
     if (_guardianPhoneNumber.isNotEmpty) {
       await _ttsService.speak(
-        'تم التسجيل بنجاح، سيتم نقلك إلى الصفحة الرئيسية',
+        'تم التسجيل بنجاح',
       );
       setState(() {
         _registrationCompleted = true;
       });
       if (mounted) {
         Navigator.of(context).pushReplacement(
-          MaterialPageRoute(builder: (context) => const MainScreen()),
+          MaterialPageRoute(builder: (context) => const LoginScreen()),
         );
       }
     } else {
@@ -221,9 +229,9 @@ class _RegistrationStepsState extends State<RegistrationSteps> {
           ),
           isActive: _currentStep >= 0,
           state:
-              _isFingerprintAuthenticated
-                  ? StepState.complete
-                  : StepState.indexed,
+          _isFingerprintAuthenticated
+              ? StepState.complete
+              : StepState.indexed,
         ),
         Step(
           title: const Text(
@@ -236,7 +244,7 @@ class _RegistrationStepsState extends State<RegistrationSteps> {
           ),
           isActive: _currentStep >= 1,
           state:
-              _phoneNumber.isNotEmpty ? StepState.complete : StepState.indexed,
+          _phoneNumber.isNotEmpty ? StepState.complete : StepState.indexed,
         ),
         Step(
           title: const Text('الاسم', style: TextStyle(color: Colors.white)),
@@ -260,9 +268,9 @@ class _RegistrationStepsState extends State<RegistrationSteps> {
           ),
           isActive: _currentStep >= 3,
           state:
-              _guardianPhoneNumber.isNotEmpty
-                  ? StepState.complete
-                  : StepState.indexed,
+          _guardianPhoneNumber.isNotEmpty
+              ? StepState.complete
+              : StepState.indexed,
         ),
       ],
     );
