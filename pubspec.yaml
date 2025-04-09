@@ -45,6 +45,7 @@ dependencies:
   convex_bottom_bar: ^3.2.0
   flutter_dotenv: ^5.2.1
   android_intent_plus: ^5.3.0
+  flutter_launcher_icons: ^0.14.3 
 
 dev_dependencies:
   flutter_test:
@@ -72,7 +73,7 @@ flutter:
   assets:
     - assets/videos/
     -   .env
-  #   - images/a_dot_burr.jpeg
+    - assets/images/
   #   - images/a_dot_ham.jpeg
 
   # An image asset can refer to one or more resolution-specific "variants", see
@@ -100,3 +101,7 @@ flutter:
   #
   # For details regarding fonts from package dependencies,
   # see https://flutter.dev/to/font-from-package
+flutter_icons:
+  android: true
+  ios: true
+  image_path: "assets/images/logo.png"
