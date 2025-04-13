@@ -14,7 +14,8 @@ class HomeScreen extends StatefulWidget {
   State<HomeScreen> createState() => _HomePageState();
 }
 
-class _HomePageState extends State<HomeScreen> with TickerProviderStateMixin {
+class _HomePageState extends State<HomeScreen>
+    with TickerProviderStateMixin, WidgetsBindingObserver {
   late VideoPlayerController _controller;
   final TTSService _ttsService = TTSService();
   final STTService _sttService = STTService();
@@ -30,6 +31,7 @@ class _HomePageState extends State<HomeScreen> with TickerProviderStateMixin {
   @override
   void initState() {
     super.initState();
+    WidgetsBinding.instance.addObserver(this); // ✅ لمراقبة حالة التطبيق
     _initializeVideo();
     _initializeServices();
     _avatarAnimController = AnimationController(
@@ -39,9 +41,42 @@ class _HomePageState extends State<HomeScreen> with TickerProviderStateMixin {
     _avatarSizeAnim = Tween<double>(begin: 180, end: 80).animate(
       CurvedAnimation(parent: _avatarAnimController, curve: Curves.easeInOut),
     );
-    _avatarPositionAnim = Tween<double>(begin: MediaQueryData.fromWindow(WidgetsBinding.instance.window).size.height / 2 - 90, end: 30).animate(
+    _avatarPositionAnim = Tween<double>(
+      begin:
+          MediaQueryData.fromWindow(
+                WidgetsBinding.instance.window,
+              ).size.height /
+              2 -
+          90,
+      end: 30,
+    ).animate(
       CurvedAnimation(parent: _avatarAnimController, curve: Curves.easeInOut),
     );
+  }
+
+  @override
+  void dispose() {
+    WidgetsBinding.instance.removeObserver(this); // ✅ مهم
+    _controller.dispose();
+    _sttService.stopListening();
+    _ttsService.stop();
+    _avatarAnimController.dispose();
+    _cameraController?.dispose();
+    super.dispose();
+  }
+
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    if (state == AppLifecycleState.paused ||
+        state == AppLifecycleState.inactive) {
+      print("⛔️ التطبيق في الخلفية، سيتم إيقاف المساعد");
+      _ttsService.stop();
+      _sttService.stopListening();
+      setState(() => _isListening = false);
+    } else if (state == AppLifecycleState.resumed) {
+      print("✅ عاد التطبيق إلى الواجهة، سيتم إعادة التشغيل");
+      _initializeServices();
+    }
   }
 
   Future<void> _initializeVideo() async {
@@ -56,7 +91,8 @@ class _HomePageState extends State<HomeScreen> with TickerProviderStateMixin {
     await _ttsService.initialize();
     await _sttService.initSpeech();
     await _ttsService.speak("جاهز للمساعدة");
-    _startListening();
+    await Future.delayed(const Duration(milliseconds: 600));
+    await _startListening();
   }
 
   Future<void> _startListening() async {
@@ -70,39 +106,53 @@ class _HomePageState extends State<HomeScreen> with TickerProviderStateMixin {
   }
 
   void _checkForCommand() {
-    Future.delayed(const Duration(milliseconds: 500), () async {
+    Future.delayed(const Duration(seconds: 6), () async {
       if (_showCamera) return;
 
       if (_sttService.lastWords.isNotEmpty && mounted) {
         String command = _sttService.lastWords;
-        print("\u{1F399} الأمر المسموع: $command");
+        print("\u{1F4AC} سيتم إرسال الأمر إلى المساعد: $command");
+
         _sttService.clearLastWords();
         await _sttService.stopListening();
         if (mounted) setState(() => _isListening = false);
 
         try {
-          String response = await _assistantService.sendMessageToAssistant(command);
+          String response = await _assistantService.sendMessageToAssistant(
+            command,
+          );
           print("\u{1F916} الرد من المساعد: $response");
 
-          String cleaned = response.replaceAll(RegExp(r'[^\w\sء-ي]'), '').trim();
+          String cleaned =
+              response.replaceAll(RegExp(r'[^\w\sء-ي]'), '').trim();
 
           if (cleaned == "أعد الكلام") {
             await _ttsService.speak("أعد الكلام");
-            _startListening();
+            await Future.delayed(const Duration(milliseconds: 600));
+            await _startListening();
           } else if (cleaned.contains("تم التنفيذ")) {
             await _ttsService.speak("تم التنفيذ");
             await _runAvatarAndOpenCamera();
           } else {
             await _ttsService.speak(response);
-            _startListening();
+            await Future.delayed(const Duration(milliseconds: 600));
+            await _startListening();
           }
         } catch (e) {
           print("\u{1F6A8} خطأ أثناء التواصل مع المساعد: $e");
           await _ttsService.speak("حدث خطأ، حاول مرة أخرى");
-          _startListening();
+          await Future.delayed(const Duration(milliseconds: 600));
+          await _startListening();
         }
-      } else if (mounted && _isListening) {
-        _checkForCommand();
+      } else if (mounted && _isListening && _sttService.lastWords.isEmpty) {
+        print("⛔️ لم يتم التقاط أي كلام من المستخدم");
+
+        await _sttService.stopListening();
+        if (mounted) setState(() => _isListening = false);
+
+        await _ttsService.speak("لم أسمع شيئًا");
+        await Future.delayed(const Duration(seconds: 1));
+        await _startListening();
       }
     });
   }
@@ -118,7 +168,9 @@ class _HomePageState extends State<HomeScreen> with TickerProviderStateMixin {
 
     await _initializeCamera();
 
-    if (mounted && _cameraController != null && _cameraController!.value.isInitialized) {
+    if (mounted &&
+        _cameraController != null &&
+        _cameraController!.value.isInitialized) {
       setState(() {
         _showCamera = true;
       });
@@ -150,16 +202,6 @@ class _HomePageState extends State<HomeScreen> with TickerProviderStateMixin {
   }
 
   @override
-  void dispose() {
-    _controller.dispose();
-    _sttService.stopListening();
-    _ttsService.stop();
-    _avatarAnimController.dispose();
-    _cameraController?.dispose();
-    super.dispose();
-  }
-
-  @override
   Widget build(BuildContext context) {
     return Container(
       decoration: BoxDecoration(
@@ -172,7 +214,9 @@ class _HomePageState extends State<HomeScreen> with TickerProviderStateMixin {
       child: Stack(
         alignment: Alignment.center,
         children: [
-          if (_showCamera && _cameraController != null && _cameraController!.value.isInitialized)
+          if (_showCamera &&
+              _cameraController != null &&
+              _cameraController!.value.isInitialized)
             Positioned.fill(child: CameraPreview(_cameraController!)),
           AnimatedBuilder(
             animation: _avatarAnimController,
@@ -187,12 +231,13 @@ class _HomePageState extends State<HomeScreen> with TickerProviderStateMixin {
                     shape: BoxShape.circle,
                   ),
                   child: ClipOval(
-                    child: _controller.value.isInitialized
-                        ? AspectRatio(
-                      aspectRatio: _controller.value.aspectRatio,
-                      child: VideoPlayer(_controller),
-                    )
-                        : const CircularProgressIndicator(),
+                    child:
+                        _controller.value.isInitialized
+                            ? AspectRatio(
+                              aspectRatio: _controller.value.aspectRatio,
+                              child: VideoPlayer(_controller),
+                            )
+                            : const CircularProgressIndicator(),
                   ),
                 ),
               );

@@ -17,10 +17,12 @@ class STTService {
       await initSpeech();
     }
     if (_speechEnabled) {
+      _lastWords = '';
       await _speech.listen(
         onResult: (result) {
           _lastWords = result.recognizedWords;
         },
+        pauseFor: const Duration(seconds: 2),
         localeId: 'ar_SA',
       );
     }
@@ -30,9 +32,7 @@ class STTService {
     await _speech.stop();
   }
 
-  // دالة جديدة لمسح الرد القديم
   void clearLastWords() {
     _lastWords = '';
   }
-
 }

@@ -3,7 +3,6 @@ import 'package:local_auth/local_auth.dart';
 import 'package:nabd/screens/login_screen.dart';
 import 'package:nabd/services/stt_service.dart';
 import 'package:nabd/services/tts_service.dart';
-import 'package:nabd/screens/main_screen.dart';
 import 'package:nabd/utils/const_value.dart';
 import 'package:nabd/widgets/avatar.dart';
 
@@ -125,10 +124,10 @@ class _RegistrationStepsState extends State<RegistrationSteps> {
         setState(() {
           _isFingerprintAuthenticated = true;
         });
-        await _ttsService.speak('تم تسجيل بصمة الإصبع بنجاح');
+        await _ttsService.speak('تم التسجيل بنجاح');
         _startStep(1);
       } else {
-        await _ttsService.speak('فشل تسجيل بصمة الإصبع، حاول مرة أخرى');
+        await _ttsService.speak('فشل تسجيل، حاول مرة أخرى');
       }
     } catch (e) {
       print('Error in fingerprint authentication: $e');
@@ -141,7 +140,7 @@ class _RegistrationStepsState extends State<RegistrationSteps> {
     if (_phoneNumber.isNotEmpty) {
       _startStep(2);
     } else {
-      await _ttsService.speak('لم أسمع رقم الهاتف، يرجى المحاولة مرة أخرى');
+      await _ttsService.speak('لم أسمع رقم الهاتف،  حاول مرة اخرىْ');
       await _listenForPhoneNumber();
     }
   }
@@ -151,7 +150,7 @@ class _RegistrationStepsState extends State<RegistrationSteps> {
     if (_name.isNotEmpty) {
       _startStep(3);
     } else {
-      await _ttsService.speak('لم أسمع الاسم، يرجى المحاولة مرة أخرى');
+      await _ttsService.speak('لم أسمع الاسم،  حاول مرة اخرىْ');
       await _listenForName();
     }
   }
@@ -165,6 +164,9 @@ class _RegistrationStepsState extends State<RegistrationSteps> {
       setState(() {
         _registrationCompleted = true;
       });
+
+      await Future.delayed(const Duration(seconds: 2));
+
       if (mounted) {
         Navigator.of(context).pushReplacement(
           MaterialPageRoute(builder: (context) => const LoginScreen()),
@@ -172,7 +174,7 @@ class _RegistrationStepsState extends State<RegistrationSteps> {
       }
     } else {
       await _ttsService.speak(
-        'لم أسمع رقم هاتف المسؤول، يرجى المحاولة مرة أخرى',
+        'لم أسمع رقم هاتف المسؤول، حاول مرة اخرىْ',
       );
       await _listenForGuardianPhoneNumber();
     }
@@ -206,73 +208,76 @@ class _RegistrationStepsState extends State<RegistrationSteps> {
 
   @override
   Widget build(BuildContext context) {
-    return Stepper(
-      currentStep: _currentStep,
-      onStepTapped: (index) {
-        if (_registrationCompleted) {
-          setState(() {
-            _currentStep = index;
-          });
-        }
-      },
-      steps: <Step>[
-        Step(
-          title: const Text(
-            'بصمة الإصبع',
-            style: TextStyle(color: Colors.white),
-          ),
-          content: Text(
-            _isFingerprintAuthenticated
-                ? 'تم التسجيل بنجاح'
-                : 'في انتظار التسجيل...',
-            style: const TextStyle(color: Colors.white),
-          ),
-          isActive: _currentStep >= 0,
-          state:
-          _isFingerprintAuthenticated
-              ? StepState.complete
-              : StepState.indexed,
+    return Column(
+      children: [
+        Stepper(
+          currentStep: _currentStep,
+          onStepTapped: (index) {
+            if (_registrationCompleted) {
+              setState(() {
+                _currentStep = index;
+              });
+            }
+          },
+          steps: <Step>[
+            Step(
+              title: const Text('بصمة الإصبع', style: TextStyle(color: Colors.white)),
+              content: Text(
+                _isFingerprintAuthenticated ? 'تم التسجيل بنجاح' : 'في انتظار التسجيل...',
+                style: const TextStyle(color: Colors.white),
+              ),
+              isActive: _currentStep >= 0,
+              state: _isFingerprintAuthenticated ? StepState.complete : StepState.indexed,
+            ),
+            Step(
+              title: const Text('رقم الهاتف', style: TextStyle(color: Colors.white)),
+              content: Text(
+                _phoneNumber.isEmpty ? 'في انتظار الرقم...' : _phoneNumber,
+                style: const TextStyle(color: Colors.white),
+              ),
+              isActive: _currentStep >= 1,
+              state: _phoneNumber.isNotEmpty ? StepState.complete : StepState.indexed,
+            ),
+            Step(
+              title: const Text('الاسم', style: TextStyle(color: Colors.white)),
+              content: Text(
+                _name.isEmpty ? 'في انتظار الاسم...' : _name,
+                style: const TextStyle(color: Colors.white),
+              ),
+              isActive: _currentStep >= 2,
+              state: _name.isNotEmpty ? StepState.complete : StepState.indexed,
+            ),
+            Step(
+              title: const Text('رقم هاتف المسؤول', style: TextStyle(color: Colors.white)),
+              content: Text(
+                _guardianPhoneNumber.isEmpty ? 'في انتظار الرقم...' : _guardianPhoneNumber,
+                style: const TextStyle(color: Colors.white),
+              ),
+              isActive: _currentStep >= 3,
+              state: _guardianPhoneNumber.isNotEmpty ? StepState.complete : StepState.indexed,
+            ),
+          ],
         ),
-        Step(
-          title: const Text(
-            'رقم الهاتف',
-            style: TextStyle(color: Colors.white),
+        const SizedBox(height: 20),
+
+        Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 20),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              if (_isFingerprintAuthenticated)
+                const Text(" بصمة الإصبع: تم التوثيق", style: TextStyle(color: Colors.white)),
+              if (_phoneNumber.isNotEmpty)
+                Text(" رقم الهاتف: $_phoneNumber", style: const TextStyle(color: Colors.white)),
+              if (_name.isNotEmpty)
+                Text(" الاسم: $_name", style: const TextStyle(color: Colors.white)),
+              if (_guardianPhoneNumber.isNotEmpty)
+                Text(" رقم المسؤول: $_guardianPhoneNumber", style: const TextStyle(color: Colors.white)),
+            ],
           ),
-          content: Text(
-            _phoneNumber.isEmpty ? 'في انتظار الرقم...' : _phoneNumber,
-            style: const TextStyle(color: Colors.white),
-          ),
-          isActive: _currentStep >= 1,
-          state:
-          _phoneNumber.isNotEmpty ? StepState.complete : StepState.indexed,
-        ),
-        Step(
-          title: const Text('الاسم', style: TextStyle(color: Colors.white)),
-          content: Text(
-            _name.isEmpty ? 'في انتظار الاسم...' : _name,
-            style: const TextStyle(color: Colors.white),
-          ),
-          isActive: _currentStep >= 2,
-          state: _name.isNotEmpty ? StepState.complete : StepState.indexed,
-        ),
-        Step(
-          title: const Text(
-            'رقم هاتف المسؤول',
-            style: TextStyle(color: Colors.white),
-          ),
-          content: Text(
-            _guardianPhoneNumber.isEmpty
-                ? 'في انتظار الرقم...'
-                : _guardianPhoneNumber,
-            style: const TextStyle(color: Colors.white),
-          ),
-          isActive: _currentStep >= 3,
-          state:
-          _guardianPhoneNumber.isNotEmpty
-              ? StepState.complete
-              : StepState.indexed,
         ),
       ],
     );
   }
+
 }
