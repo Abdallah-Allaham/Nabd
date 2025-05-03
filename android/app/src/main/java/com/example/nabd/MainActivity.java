@@ -12,7 +12,6 @@ import android.view.WindowManager;
 import androidx.annotation.NonNull;
 import android.util.Log;
 
-
 import io.flutter.embedding.android.FlutterFragmentActivity;
 import io.flutter.embedding.engine.FlutterEngine;
 import io.flutter.plugin.common.MethodChannel;
@@ -20,14 +19,18 @@ import io.flutter.plugins.GeneratedPluginRegistrant;
 
 public class MainActivity extends FlutterFragmentActivity {
     private static final String CHANNEL = "nabd/foreground";
+    private static final String VOICE_ID_CHANNEL = "nabd/voiceid";
+    private VoiceIdService voiceIdService;
 
     @Override
     public void configureFlutterEngine(@NonNull FlutterEngine flutterEngine) {
         GeneratedPluginRegistrant.registerWith(flutterEngine);
 
-        // ✅ أوقف الخدمة عند تشغيل التطبيق
+        // أوقف الخدمة عند تشغيل التطبيق
         Intent stopIntent = new Intent(this, PorcupainService.class);
         stopService(stopIntent);
+
+        voiceIdService = new VoiceIdService(this);
 
         new MethodChannel(flutterEngine.getDartExecutor().getBinaryMessenger(), CHANNEL)
                 .setMethodCallHandler((call, result) -> {
@@ -76,7 +79,25 @@ public class MainActivity extends FlutterFragmentActivity {
                             result.success(canDraw);
                             break;
 
+                        default:
+                            result.notImplemented();
+                            break;
+                    }
+                });
 
+        new MethodChannel(flutterEngine.getDartExecutor().getBinaryMessenger(), VOICE_ID_CHANNEL)
+                .setMethodCallHandler((call, result) -> {
+                    switch (call.method) {
+                        case "enrollVoice":
+                            voiceIdService.enrollVoice(this, result);
+                            break;
+                        case "resetEnrollment":
+                            voiceIdService.resetEnrollment(this, result);
+                            break;
+                        case "isProfileEnrolled":
+                            boolean enrolled = voiceIdService.isProfileEnrolled(this);
+                            result.success(enrolled);
+                            break;
                         default:
                             result.notImplemented();
                             break;
@@ -84,7 +105,6 @@ public class MainActivity extends FlutterFragmentActivity {
                 });
     }
 
-    // ✅ دالة التحقق إذا إذن إمكانية الوصول مفعّل
     private boolean isAccessibilityServiceEnabled(Context context, Class<?> accessibilityService) {
         String expectedComponentName = context.getPackageName() + "/" + accessibilityService.getName();
         String enabledServices = Settings.Secure.getString(

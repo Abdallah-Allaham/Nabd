@@ -41,6 +41,7 @@ android {
 
 dependencies {
     implementation("ai.picovoice:porcupine-android:3.0.0")
+    implementation("ai.picovoice:eagle-android:1.0.0")
 }
 
 flutter {

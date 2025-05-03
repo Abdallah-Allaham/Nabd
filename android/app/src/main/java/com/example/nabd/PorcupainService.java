@@ -12,6 +12,9 @@ import androidx.core.app.NotificationCompat;
 import ai.picovoice.porcupine.PorcupineManager;
 import ai.picovoice.porcupine.PorcupineException;
 import ai.picovoice.porcupine.PorcupineManagerCallback;
+import android.media.AudioFormat;
+import android.media.AudioRecord;
+import android.media.MediaRecorder;
 
 public class PorcupainService extends Service {
     private static final String TAG = "PorcupainService";
@@ -20,6 +23,17 @@ public class PorcupainService extends Service {
     private PorcupineManager porcupineManager;
     private boolean isRunning = false;
     private NotificationManager notificationManager;
+    private VoiceIdService voiceIdService;
+
+    private static final int SAMPLE_RATE = 16000;
+    private static final int CHANNELS = AudioFormat.CHANNEL_IN_MONO;
+    private static final int ENCODING = AudioFormat.ENCODING_PCM_16BIT;
+    private static final int FRAME_LENGTH = 512;
+    private static final int BUFFER_SIZE = AudioRecord.getMinBufferSize(SAMPLE_RATE, CHANNELS, ENCODING);
+    private AudioRecord audioRecord;
+    private short[] audioBuffer;
+    private int bufferIndex = 0;
+    private boolean isRecording = false;
 
     String apiKey = "acaklMqZ8HYXIatuuJRKKYj4p07vzsefUnJxzlRpX20qJDqF+KUv4w==";
 
@@ -29,6 +43,12 @@ public class PorcupainService extends Service {
         Log.d(TAG, "Service Created");
         notificationManager = (NotificationManager) getSystemService(NOTIFICATION_SERVICE);
         createNotificationChannel();
+
+        voiceIdService = new VoiceIdService(this);
+
+        // تخصيص Buffer لتخزين الصوت (2 ثانية من الصوت)
+        int bufferSizeInFrames = SAMPLE_RATE * 2 / FRAME_LENGTH; // 2 ثانية
+        audioBuffer = new short[bufferSizeInFrames * FRAME_LENGTH];
 
         try {
             porcupineManager = new PorcupineManager.Builder()
@@ -40,7 +60,7 @@ public class PorcupainService extends Service {
                         public void invoke(int keywordIndex) {
                             if (keywordIndex == 0) {
                                 Log.d(TAG, "Keyword 'نبض' detected!");
-                                openApp();
+                                verifyAndOpenApp(audioBuffer);
                             }
                         }
                     });
@@ -58,8 +78,28 @@ public class PorcupainService extends Service {
             startForeground(NOTIFICATION_ID, notification);
             Log.d(TAG, "Foreground service started with notification");
             startListening();
+            startRecording();
         }
         return START_STICKY;
+    }
+
+    private void startRecording() {
+        audioRecord = new AudioRecord(MediaRecorder.AudioSource.MIC, SAMPLE_RATE, CHANNELS, ENCODING, BUFFER_SIZE);
+        audioRecord.startRecording();
+        isRecording = true;
+
+        new Thread(() -> {
+            while (isRecording) {
+                short[] frameBuffer = new short[FRAME_LENGTH];
+                int numRead = audioRecord.read(frameBuffer, 0, frameBuffer.length);
+                if (numRead > 0) {
+                    synchronized (audioBuffer) {
+                        System.arraycopy(frameBuffer, 0, audioBuffer, bufferIndex * FRAME_LENGTH, numRead);
+                        bufferIndex = (bufferIndex + 1) % (audioBuffer.length / FRAME_LENGTH);
+                    }
+                }
+            }
+        }).start();
     }
 
     private void startListening() {
@@ -72,6 +112,32 @@ public class PorcupainService extends Service {
         }
     }
 
+    private void verifyAndOpenApp(short[] audioBuffer) {
+        io.flutter.plugin.common.MethodChannel.Result callback = new io.flutter.plugin.common.MethodChannel.Result() {
+            @Override
+            public void success(Object result) {
+                if ("Voice matched".equals(result)) {
+                    Log.d(TAG, "Voice verified, opening app...");
+                    openApp();
+                } else {
+                    Log.d(TAG, "Voice not matched, ignoring...");
+                }
+            }
+
+            @Override
+            public void error(String errorCode, String errorMessage, Object errorDetails) {
+                Log.e(TAG, "Voice verification error: " + errorMessage);
+            }
+
+            @Override
+            public void notImplemented() {
+                Log.w(TAG, "Method not implemented");
+            }
+        };
+
+        voiceIdService.verifyVoice(this, audioBuffer, callback);
+    }
+
     private void openApp() {
         Log.d(TAG, "Trying to open app using AccessibilityService...");
 
@@ -81,7 +147,6 @@ public class PorcupainService extends Service {
             return;
         }
 
-        // ✅ الحل الأفضل: استخدم getLaunchIntentForPackage
         Intent launchIntent = getPackageManager().getLaunchIntentForPackage(getPackageName());
         if (launchIntent != null) {
             launchIntent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK | Intent.FLAG_ACTIVITY_CLEAR_TOP);
@@ -92,10 +157,9 @@ public class PorcupainService extends Service {
         }
     }
 
-
     private Notification createNotification() {
         NotificationCompat.Builder builder = new NotificationCompat.Builder(this, CHANNEL_ID)
-                .setSmallIcon(android.R.drawable.ic_btn_speak_now) // رمز مايكروفون
+                .setSmallIcon(android.R.drawable.ic_btn_speak_now)
                 .setContentTitle("Voice Detection Active")
                 .setContentText("Listening for the wake word...")
                 .setPriority(NotificationCompat.PRIORITY_LOW)
@@ -118,6 +182,12 @@ public class PorcupainService extends Service {
     @Override
     public void onDestroy() {
         isRunning = false;
+        isRecording = false;
+        if (audioRecord != null) {
+            audioRecord.stop();
+            audioRecord.release();
+            audioRecord = null;
+        }
         if (porcupineManager != null) {
             try {
                 porcupineManager.stop();
