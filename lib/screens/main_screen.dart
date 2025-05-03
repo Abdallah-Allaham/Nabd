@@ -1,5 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:convex_bottom_bar/convex_bottom_bar.dart';
+import 'package:nabd/screens/profile_screen.dart';
+import 'package:nabd/screens/setting_screen.dart';
 import 'home_screen.dart'; // تأكد من أن المسار صحيح
 
 class MainScreen extends StatefulWidget {
@@ -12,9 +14,9 @@ class MainScreen extends StatefulWidget {
 class _MainScreenState extends State<MainScreen> {
   int _selectedIndex = 1;
   final List<Widget> _pages = [
-    const Placeholder(), // Profile Page
+    const ProfileScreen(), // Profile Page
     const HomeScreen(),   // Home Page
-    const Placeholder(), // Settings Page
+    const SettingScreen(), // Settings Page
   ];
 
   @override

@@ -1,10 +1,10 @@
 import 'package:flutter/material.dart';
-import 'package:local_auth/local_auth.dart';
 import 'package:nabd/screens/login_screen.dart';
 import 'package:nabd/services/stt_service.dart';
 import 'package:nabd/services/tts_service.dart';
 import 'package:nabd/utils/const_value.dart';
 import 'package:nabd/widgets/avatar.dart';
+import 'package:flutter/services.dart';
 
 class SignupScreen extends StatelessWidget {
   const SignupScreen({super.key});
@@ -43,14 +43,14 @@ class RegistrationSteps extends StatefulWidget {
 
 class _RegistrationStepsState extends State<RegistrationSteps> {
   int _currentStep = 0;
-  final LocalAuthentication _localAuth = LocalAuthentication();
   final TTSService _ttsService = TTSService();
   final STTService _sttService = STTService();
+  static const voiceIdChannel = MethodChannel('nabd/voiceid');
 
-  bool _isFingerprintAuthenticated = false;
   String _phoneNumber = '';
   String _name = '';
   String _guardianPhoneNumber = '';
+  String _voiceIdStatus = ''; // لتخزين حالة تسجيل الصوت
   bool _registrationCompleted = false;
 
   @override
@@ -76,71 +76,34 @@ class _RegistrationStepsState extends State<RegistrationSteps> {
 
     switch (stepIndex) {
       case 0:
-        await _ttsService.speak('يرجى وضع إصبعك لتسجيل بصمة الإصبع');
-        await Future.delayed(const Duration(milliseconds: 150));
-        _authenticateWithFingerprint();
-        break;
-      case 1:
         await _ttsService.speak('يرجى إدخال رقم هاتفك');
         await Future.delayed(const Duration(milliseconds: 150));
         await _listenForPhoneNumber();
         break;
-      case 2:
+      case 1:
         await _ttsService.speak('يرجى إدخال اسمك');
         await Future.delayed(const Duration(milliseconds: 150));
         await _listenForName();
         break;
-      case 3:
+      case 2:
         await _ttsService.speak('يرجى إدخال رقم هاتف المسؤول عنك');
         await Future.delayed(const Duration(milliseconds: 150));
         await _listenForGuardianPhoneNumber();
         break;
-    }
-  }
-
-  Future<void> _authenticateWithFingerprint() async {
-    try {
-      bool canCheckBiometrics = await _localAuth.canCheckBiometrics;
-      if (!canCheckBiometrics) {
-        await _ttsService.speak('جهازك لا يدعم بصمة الإصبع');
-        return;
-      }
-
-      bool isDeviceSupported = await _localAuth.isDeviceSupported();
-      if (!isDeviceSupported) {
-        await _ttsService.speak('البصمة غير مدعومة أو تم تعطيلها');
-        return;
-      }
-
-      bool authenticated = await _localAuth.authenticate(
-        localizedReason: 'يرجى وضع إصبعك لتسجيل بصمة الإصبع',
-        options: const AuthenticationOptions(
-          biometricOnly: true,
-          stickyAuth: true,
-        ),
-      );
-
-      if (authenticated) {
-        setState(() {
-          _isFingerprintAuthenticated = true;
-        });
-        await _ttsService.speak('تم التسجيل بنجاح');
-        _startStep(1);
-      } else {
-        await _ttsService.speak('فشل تسجيل، حاول مرة أخرى');
-      }
-    } catch (e) {
-      print('Error in fingerprint authentication: $e');
-      await _ttsService.speak('حدث خطأ في المصادقة، يرجى المحاولة لاحقًا');
+      case 3:
+        await _ttsService.speak('يرجى تسجيل صوتك، تحدث لمدة 10-15 ثانية');
+        await Future.delayed(const Duration(milliseconds: 150));
+        await _enrollVoice();
+        break;
     }
   }
 
   Future<void> _listenForPhoneNumber() async {
     _phoneNumber = await _waitForSpeechResult();
     if (_phoneNumber.isNotEmpty) {
-      _startStep(2);
+      _startStep(1);
     } else {
-      await _ttsService.speak('لم أسمع رقم الهاتف،  حاول مرة اخرىْ');
+      await _ttsService.speak('لم أسمع رقم الهاتف، حاول مرة أخرى');
       await _listenForPhoneNumber();
     }
   }
@@ -148,9 +111,9 @@ class _RegistrationStepsState extends State<RegistrationSteps> {
   Future<void> _listenForName() async {
     _name = await _waitForSpeechResult();
     if (_name.isNotEmpty) {
-      _startStep(3);
+      _startStep(2);
     } else {
-      await _ttsService.speak('لم أسمع الاسم،  حاول مرة اخرىْ');
+      await _ttsService.speak('لم أسمع الاسم، حاول مرة أخرى');
       await _listenForName();
     }
   }
@@ -158,25 +121,60 @@ class _RegistrationStepsState extends State<RegistrationSteps> {
   Future<void> _listenForGuardianPhoneNumber() async {
     _guardianPhoneNumber = await _waitForSpeechResult();
     if (_guardianPhoneNumber.isNotEmpty) {
-      await _ttsService.speak(
-        'تم التسجيل بنجاح',
-      );
-      setState(() {
-        _registrationCompleted = true;
-      });
-
-      await Future.delayed(const Duration(seconds: 2));
-
-      if (mounted) {
-        Navigator.of(context).pushReplacement(
-          MaterialPageRoute(builder: (context) => const LoginScreen()),
-        );
-      }
+      _startStep(3);
     } else {
-      await _ttsService.speak(
-        'لم أسمع رقم هاتف المسؤول، حاول مرة اخرىْ',
-      );
+      await _ttsService.speak('لم أسمع رقم هاتف المسؤول، حاول مرة أخرى');
       await _listenForGuardianPhoneNumber();
+    }
+  }
+
+  Future<void> _enrollVoice() async {
+    setState(() {
+      _voiceIdStatus = 'جاري تسجيل الصوت...';
+    });
+
+    try {
+      final String result = await voiceIdChannel.invokeMethod('enrollVoice');
+      if (result == "Voice enrolled successfully") {
+        setState(() {
+          _voiceIdStatus = 'تم تسجيل الصوت بنجاح';
+        });
+        await _ttsService.speak('تم تسجيل الصوت بنجاح');
+        _completeRegistration();
+      } else if (result == "Voice already enrolled") {
+        setState(() {
+          _voiceIdStatus = 'الصوت مسجل مسبقًا';
+        });
+        await _ttsService.speak('الصوت مسجل مسبقًا');
+        _completeRegistration();
+      } else {
+        setState(() {
+          _voiceIdStatus = 'فشل التسجيل، حاول مرة أخرى';
+        });
+        await _ttsService.speak('فشل التسجيل، حاول مرة أخرى');
+        await _enrollVoice(); // إعادة المحاولة
+      }
+    } catch (e) {
+      setState(() {
+        _voiceIdStatus = 'خطأ: $e';
+      });
+      await _ttsService.speak('حدث خطأ، حاول مرة أخرى');
+      await _enrollVoice();
+    }
+  }
+
+  Future<void> _completeRegistration() async {
+    await _ttsService.speak('تم التسجيل بنجاح');
+    setState(() {
+      _registrationCompleted = true;
+    });
+
+    await Future.delayed(const Duration(seconds: 2));
+
+    if (mounted) {
+      Navigator.of(context).pushReplacement(
+        MaterialPageRoute(builder: (context) => const LoginScreen()),
+      );
     }
   }
 
@@ -221,21 +219,12 @@ class _RegistrationStepsState extends State<RegistrationSteps> {
           },
           steps: <Step>[
             Step(
-              title: const Text('بصمة الإصبع', style: TextStyle(color: Colors.white)),
-              content: Text(
-                _isFingerprintAuthenticated ? 'تم التسجيل بنجاح' : 'في انتظار التسجيل...',
-                style: const TextStyle(color: Colors.white),
-              ),
-              isActive: _currentStep >= 0,
-              state: _isFingerprintAuthenticated ? StepState.complete : StepState.indexed,
-            ),
-            Step(
               title: const Text('رقم الهاتف', style: TextStyle(color: Colors.white)),
               content: Text(
                 _phoneNumber.isEmpty ? 'في انتظار الرقم...' : _phoneNumber,
                 style: const TextStyle(color: Colors.white),
               ),
-              isActive: _currentStep >= 1,
+              isActive: _currentStep >= 0,
               state: _phoneNumber.isNotEmpty ? StepState.complete : StepState.indexed,
             ),
             Step(
@@ -244,7 +233,7 @@ class _RegistrationStepsState extends State<RegistrationSteps> {
                 _name.isEmpty ? 'في انتظار الاسم...' : _name,
                 style: const TextStyle(color: Colors.white),
               ),
-              isActive: _currentStep >= 2,
+              isActive: _currentStep >= 1,
               state: _name.isNotEmpty ? StepState.complete : StepState.indexed,
             ),
             Step(
@@ -253,31 +242,38 @@ class _RegistrationStepsState extends State<RegistrationSteps> {
                 _guardianPhoneNumber.isEmpty ? 'في انتظار الرقم...' : _guardianPhoneNumber,
                 style: const TextStyle(color: Colors.white),
               ),
-              isActive: _currentStep >= 3,
+              isActive: _currentStep >= 2,
               state: _guardianPhoneNumber.isNotEmpty ? StepState.complete : StepState.indexed,
+            ),
+            Step(
+              title: const Text('تسجيل الصوت', style: TextStyle(color: Colors.white)),
+              content: Text(
+                _voiceIdStatus.isEmpty ? 'في انتظار التسجيل...' : _voiceIdStatus,
+                style: const TextStyle(color: Colors.white),
+              ),
+              isActive: _currentStep >= 3,
+              state: _voiceIdStatus == 'تم تسجيل الصوت بنجاح' || _voiceIdStatus == 'الصوت مسجل مسبقًا' ? StepState.complete : StepState.indexed,
             ),
           ],
         ),
         const SizedBox(height: 20),
-
         Padding(
           padding: const EdgeInsets.symmetric(horizontal: 20),
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              if (_isFingerprintAuthenticated)
-                const Text(" بصمة الإصبع: تم التوثيق", style: TextStyle(color: Colors.white)),
               if (_phoneNumber.isNotEmpty)
-                Text(" رقم الهاتف: $_phoneNumber", style: const TextStyle(color: Colors.white)),
+                Text("رقم الهاتف: $_phoneNumber", style: const TextStyle(color: Colors.white)),
               if (_name.isNotEmpty)
-                Text(" الاسم: $_name", style: const TextStyle(color: Colors.white)),
+                Text("الاسم: $_name", style: const TextStyle(color: Colors.white)),
               if (_guardianPhoneNumber.isNotEmpty)
-                Text(" رقم المسؤول: $_guardianPhoneNumber", style: const TextStyle(color: Colors.white)),
+                Text("رقم المسؤول: $_guardianPhoneNumber", style: const TextStyle(color: Colors.white)),
+              if (_voiceIdStatus.isNotEmpty)
+                Text("حالة الصوت: $_voiceIdStatus", style: const TextStyle(color: Colors.white)),
             ],
           ),
         ),
       ],
     );
   }
-
 }
