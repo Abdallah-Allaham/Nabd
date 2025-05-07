@@ -9,10 +9,14 @@ import android.Manifest;
 import android.content.pm.PackageManager;
 import android.os.Handler;
 import android.os.Looper;
+import android.util.Log;
 
 import java.io.File;
 import java.io.FileOutputStream;
 import java.io.FileInputStream;
+import java.io.DataOutputStream;
+import java.nio.ByteBuffer;
+import java.nio.ByteOrder;
 
 import ai.picovoice.eagle.Eagle;
 import ai.picovoice.eagle.EagleException;
@@ -22,6 +26,7 @@ import ai.picovoice.eagle.EagleProfilerEnrollResult;
 import io.flutter.plugin.common.MethodChannel;
 
 public class VoiceIdService {
+    private static final String TAG = "VoiceIdService";
     private static final String ACCESS_KEY = "acaklMqZ8HYXIatuuJRKKYj4p07vzsefUnJxzlRpX20qJDqF+KUv4w==";
     private static final int SAMPLE_RATE = 16000;
     private static final int CHANNELS = AudioFormat.CHANNEL_IN_MONO;
@@ -29,6 +34,8 @@ public class VoiceIdService {
     private static final int BUFFER_SIZE = AudioRecord.getMinBufferSize(SAMPLE_RATE, CHANNELS, ENCODING);
     private static final int FRAME_LENGTH = 512;
     private static final String PROFILE_FILE = "voice_profile.bin";
+    private static final String AUDIO_FILE = "enroll_audio.wav";
+    private static final int RECORD_DURATION_SECONDS = 5;
 
     private Eagle eagle;
     private EagleProfiler eagleProfiler;
@@ -42,90 +49,163 @@ public class VoiceIdService {
 
     public void enrollVoice(Context context, MethodChannel.Result result) {
         if (ActivityCompat.checkSelfPermission(context, Manifest.permission.RECORD_AUDIO) != PackageManager.PERMISSION_GRANTED) {
+            Log.e(TAG, "Microphone permission not granted");
             result.error("PERMISSION_ERROR", "Microphone permission not granted", null);
             return;
         }
 
         File profileFile = new File(context.getFilesDir(), PROFILE_FILE);
         if (profileFile.exists()) {
+            Log.d(TAG, "Voice profile already exists");
             result.success("Voice already enrolled");
             return;
         }
 
         try {
+            Log.d(TAG, "Initializing EagleProfiler...");
             eagleProfiler = new EagleProfiler.Builder()
                     .setAccessKey(ACCESS_KEY)
                     .build(context);
+            Log.d(TAG, "EagleProfiler initialized successfully");
 
+            Log.d(TAG, "Starting audio recording...");
             audioRecord = new AudioRecord(MediaRecorder.AudioSource.MIC, SAMPLE_RATE, CHANNELS, ENCODING, BUFFER_SIZE);
+            if (audioRecord.getState() != AudioRecord.STATE_INITIALIZED) {
+                Log.e(TAG, "Failed to initialize AudioRecord");
+                result.error("AUDIO_INIT_ERROR", "Failed to initialize audio recording", null);
+                stopRecording();
+                return;
+            }
             audioRecord.startRecording();
             isRecording = true;
+            Log.d(TAG, "Audio recording started");
 
             new Thread(() -> {
-                float percentage = 0;
-                long startTime = System.currentTimeMillis();
-                long timeoutMillis = 15000;
-
-                int minEnrollSamples = eagleProfiler.getMinEnrollSamples();
-                int numFramesPerEnroll = minEnrollSamples / FRAME_LENGTH;
-
-                while (isRecording && percentage < 100 && (System.currentTimeMillis() - startTime) < timeoutMillis) {
-                    short[] enrollBuffer = new short[numFramesPerEnroll * FRAME_LENGTH];
+                try {
+                    int totalSamples = SAMPLE_RATE * RECORD_DURATION_SECONDS;
+                    short[] enrollBuffer = new short[totalSamples];
                     int totalSamplesRead = 0;
 
-                    for (int i = 0; i < numFramesPerEnroll; i++) {
+                    // تسجيل الصوت
+                    Log.d(TAG, "Recording audio for " + RECORD_DURATION_SECONDS + " seconds...");
+                    while (isRecording && totalSamplesRead < totalSamples) {
                         short[] frameBuffer = new short[FRAME_LENGTH];
                         int numRead = audioRecord.read(frameBuffer, 0, frameBuffer.length);
                         if (numRead <= 0) {
+                            Log.e(TAG, "Failed to read audio data: " + numRead);
                             runOnUiThread(() -> result.error("AUDIO_READ_ERROR", "Failed to read audio data", null));
                             return;
                         }
-                        System.arraycopy(frameBuffer, 0, enrollBuffer, i * FRAME_LENGTH, numRead);
-                        totalSamplesRead += numRead;
+                        int samplesToCopy = Math.min(numRead, totalSamples - totalSamplesRead);
+                        System.arraycopy(frameBuffer, 0, enrollBuffer, totalSamplesRead, samplesToCopy);
+                        totalSamplesRead += samplesToCopy;
                     }
+                    Log.d(TAG, "Finished recording audio, total samples read: " + totalSamplesRead);
 
+                    // حفظ الصوت كملف WAV
+                    Log.d(TAG, "Saving audio to WAV file...");
                     try {
-                        EagleProfilerEnrollResult feedbackResult = eagleProfiler.enroll(enrollBuffer);
-                        percentage = feedbackResult.getPercentage();
-                        if (percentage >= 100) {
-                            speakerProfile = eagleProfiler.export();
-                            saveProfile(context, speakerProfile);
-                            eagle = new Eagle.Builder()
-                                    .setAccessKey(ACCESS_KEY)
-                                    .setSpeakerProfiles(new EagleProfile[]{speakerProfile})
-                                    .build(context);
-                            runOnUiThread(() -> result.success("Voice enrolled successfully"));
-                            stopRecording();
-                            return;
-                        }
-                    } catch (EagleException e) {
-                        runOnUiThread(() -> result.error("ENROLL_ERROR", e.getMessage(), null));
-                        stopRecording();
+                        saveAudioToWav(context, enrollBuffer);
+                        Log.d(TAG, "Audio saved successfully as " + AUDIO_FILE);
+                    } catch (Exception e) {
+                        Log.e(TAG, "Failed to save audio file: " + e.getMessage(), e);
+                        runOnUiThread(() -> result.error("SAVE_ERROR", "Failed to save audio file: " + e.getMessage(), null));
                         return;
                     }
-                }
 
-                runOnUiThread(() -> result.error("ENROLL_TIMEOUT", "Enrollment timed out, please try again", null));
-                stopRecording();
+                    // عملية الـ Enrollment بتكرار حتى الوصول إلى 85%
+                    Log.d(TAG, "Starting voice enrollment...");
+                    try {
+                        if (eagleProfiler == null) {
+                            Log.e(TAG, "EagleProfiler is null before enrollment");
+                            runOnUiThread(() -> result.error("ENROLL_ERROR", "EagleProfiler is null", null));
+                            return;
+                        }
+                        float percentage = 0;
+                        while (percentage < 85) { // تغيير النسبة إلى 85%
+                            EagleProfilerEnrollResult feedbackResult = eagleProfiler.enroll(enrollBuffer);
+                            percentage = feedbackResult.getPercentage();
+                            Log.d(TAG, "Enrollment percentage: " + percentage);
+                            if (percentage >= 85) break;
+                            Thread.sleep(100); // تأخير اختياري
+                        }
+                        speakerProfile = eagleProfiler.export();
+                        saveProfile(context, speakerProfile);
+                        eagle = new Eagle.Builder()
+                                .setAccessKey(ACCESS_KEY)
+                                .setSpeakerProfiles(new EagleProfile[]{speakerProfile})
+                                .build(context);
+                        Log.d(TAG, "Voice enrolled successfully");
+                        runOnUiThread(() -> result.success("Voice enrolled successfully"));
+                    } catch (EagleException e) {
+                        Log.e(TAG, "Enrollment error: " + e.getMessage(), e);
+                        runOnUiThread(() -> result.error("ENROLL_ERROR", e.getMessage(), null));
+                    } catch (InterruptedException e) {
+                        Log.e(TAG, "Thread interrupted: " + e.getMessage(), e);
+                        runOnUiThread(() -> result.error("THREAD_ERROR", "Thread interrupted", null));
+                    }
+                } catch (Exception e) {
+                    Log.e(TAG, "Unexpected error during enrollment: " + e.getMessage(), e);
+                    runOnUiThread(() -> result.error("UNEXPECTED_ERROR", "An unexpected error occurred: " + e.getMessage(), null));
+                } finally {
+                    Log.d(TAG, "Stopping recording...");
+                    stopRecording();
+                    Log.d(TAG, "Recording stopped");
+                }
             }).start();
         } catch (EagleException e) {
+            Log.e(TAG, "Failed to initialize EagleProfiler: " + e.getMessage(), e);
             result.error("ENROLL_INIT_ERROR", e.getMessage(), null);
+        } catch (Exception e) {
+            Log.e(TAG, "Unexpected error during setup: " + e.getMessage(), e);
+            result.error("SETUP_ERROR", "Unexpected error during setup: " + e.getMessage(), null);
+        }
+    }
+
+    private void saveAudioToWav(Context context, short[] audioData) throws Exception {
+        File audioFile = new File(context.getFilesDir(), AUDIO_FILE);
+        Log.d(TAG, "Saving WAV file to: " + audioFile.getAbsolutePath());
+        try (FileOutputStream fos = new FileOutputStream(audioFile);
+             DataOutputStream dos = new DataOutputStream(fos)) {
+            int byteRate = SAMPLE_RATE * 2;
+            int dataSize = audioData.length * 2;
+
+            dos.writeBytes("RIFF");
+            dos.writeInt(Integer.reverseBytes(36 + dataSize));
+            dos.writeBytes("WAVE");
+            dos.writeBytes("fmt ");
+            dos.writeInt(Integer.reverseBytes(16));
+            dos.writeShort(Short.reverseBytes((short) 1));
+            dos.writeShort(Short.reverseBytes((short) 1));
+            dos.writeInt(Integer.reverseBytes(SAMPLE_RATE));
+            dos.writeInt(Integer.reverseBytes(byteRate));
+            dos.writeShort(Short.reverseBytes((short) 2));
+            dos.writeShort(Short.reverseBytes((short) 16));
+            dos.writeBytes("data");
+            dos.writeInt(Integer.reverseBytes(dataSize));
+
+            ByteBuffer buffer = ByteBuffer.allocate(dataSize).order(ByteOrder.LITTLE_ENDIAN);
+            for (short sample : audioData) {
+                buffer.putShort(sample);
+            }
+            dos.write(buffer.array());
         }
     }
 
     public boolean verifyVoice(Context context, short[] audioBuffer, MethodChannel.Result result) {
         if (speakerProfile == null) {
+            Log.e(TAG, "No voice profile enrolled");
             result.error("NO_PROFILE", "No voice profile enrolled", null);
             return false;
         }
 
         if (audioBuffer == null || audioBuffer.length == 0) {
+            Log.e(TAG, "Audio buffer is empty or null");
             result.error("INVALID_BUFFER", "Audio buffer is empty or null", null);
             return false;
         }
 
         try {
-            // معالجة الصوت من الـ Buffer مباشرة
             int numFrames = audioBuffer.length / FRAME_LENGTH;
             float highestScore = 0;
 
@@ -138,14 +218,18 @@ public class VoiceIdService {
                 }
             }
 
-            if (highestScore > 0.7) {
+            Log.d(TAG, "Voice verification score: " + highestScore);
+            if (highestScore > 0.6) {
+                Log.d(TAG, "Voice matched");
                 result.success("Voice matched");
                 return true;
             } else {
+                Log.d(TAG, "Voice not matched");
                 result.success("Voice not matched");
                 return false;
             }
         } catch (EagleException e) {
+            Log.e(TAG, "Verification error: " + e.getMessage(), e);
             result.error("VERIFY_ERROR", e.getMessage(), null);
             return false;
         }
@@ -157,13 +241,19 @@ public class VoiceIdService {
             if (file.exists()) {
                 file.delete();
             }
+            File audioFile = new File(context.getFilesDir(), AUDIO_FILE);
+            if (audioFile.exists()) {
+                audioFile.delete();
+            }
             speakerProfile = null;
             if (eagle != null) {
                 eagle.delete();
                 eagle = null;
             }
+            Log.d(TAG, "Enrollment reset successfully");
             result.success("Enrollment reset successfully");
         } catch (Exception e) {
+            Log.e(TAG, "Failed to reset enrollment: " + e.getMessage(), e);
             result.error("RESET_ERROR", "Failed to reset enrollment: " + e.getMessage(), null);
         }
     }
@@ -179,8 +269,9 @@ public class VoiceIdService {
             FileOutputStream fos = new FileOutputStream(file);
             fos.write(profile.getBytes());
             fos.close();
+            Log.d(TAG, "Voice profile saved successfully");
         } catch (Exception e) {
-            // تجاهل الأخطاء عند الحفظ
+            Log.e(TAG, "Failed to save voice profile: " + e.getMessage(), e);
         }
     }
 
@@ -197,22 +288,33 @@ public class VoiceIdService {
                         .setAccessKey(ACCESS_KEY)
                         .setSpeakerProfiles(new EagleProfile[]{speakerProfile})
                         .build(context);
+                Log.d(TAG, "Speaker profile loaded successfully");
             }
         } catch (Exception e) {
-            // تجاهل الأخطاء عند التحميل
+            Log.e(TAG, "Failed to load speaker profile: " + e.getMessage(), e);
         }
     }
 
     private void stopRecording() {
         isRecording = false;
         if (audioRecord != null) {
-            audioRecord.stop();
-            audioRecord.release();
-            audioRecord = null;
+            try {
+                audioRecord.stop();
+                audioRecord.release();
+            } catch (Exception e) {
+                Log.e(TAG, "Error stopping AudioRecord: " + e.getMessage(), e);
+            } finally {
+                audioRecord = null;
+            }
         }
         if (eagleProfiler != null) {
-            eagleProfiler.delete();
-            eagleProfiler = null;
+            try {
+                eagleProfiler.delete();
+            } catch (Exception e) {
+                Log.e(TAG, "Error deleting EagleProfiler: " + e.getMessage(), e);
+            } finally {
+                eagleProfiler = null;
+            }
         }
     }
 

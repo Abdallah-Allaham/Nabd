@@ -91,7 +91,7 @@ class _RegistrationStepsState extends State<RegistrationSteps> {
         await _listenForGuardianPhoneNumber();
         break;
       case 3:
-        await _ttsService.speak('يرجى تسجيل صوتك، تحدث لمدة 10-15 ثانية');
+        await _ttsService.speak('يرجى تسجيل صوتك، تحدث لمدة 5 ثانية');
         await Future.delayed(const Duration(milliseconds: 150));
         await _enrollVoice();
         break;

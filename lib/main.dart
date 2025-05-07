@@ -4,6 +4,7 @@ import 'package:flutter_dotenv/flutter_dotenv.dart';
 import 'package:nabd/screens/splash_screen.dart';
 import 'package:nabd/utils/shared_preferences_helper.dart';
 import 'package:android_intent_plus/android_intent.dart';
+import 'package:permission_handler/permission_handler.dart';
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -28,7 +29,8 @@ class _MyAppState extends State<MyApp> with WidgetsBindingObserver {
     WidgetsBinding.instance.addObserver(this);
     requestBatteryIgnorePermission();
     requestOverlayPermission();
-    checkAccessibilityPermission(); // ← استدعاء التحقق
+    checkAccessibilityPermission();
+    requestMicrophonePermission(); // ← إضافة طلب إذن الميكروفون
   }
 
   @override
@@ -75,7 +77,6 @@ class _MyAppState extends State<MyApp> with WidgetsBindingObserver {
     }
   }
 
-  /// ✅ تفقد إذن إمكانية الوصول وافتح الإعدادات فقط إذا مش مفعّل
   Future<void> checkAccessibilityPermission() async {
     try {
       final bool isEnabled = await platform.invokeMethod('isAccessibilityEnabled');
@@ -87,6 +88,23 @@ class _MyAppState extends State<MyApp> with WidgetsBindingObserver {
       }
     } catch (e) {
       print("Error checking accessibility permission: $e");
+    }
+  }
+
+  Future<void> requestMicrophonePermission() async {
+    try {
+      var status = await Permission.microphone.status;
+      if (!status.isGranted) {
+        await Permission.microphone.request();
+      }
+
+      status = await Permission.microphone.status;
+      if (!status.isGranted) {
+        print("Microphone permission not granted, opening app settings...");
+        await openAppSettings();
+      }
+    } catch (e) {
+      print("Error requesting microphone permission: $e");
     }
   }
 

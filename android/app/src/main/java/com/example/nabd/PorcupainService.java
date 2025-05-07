@@ -8,7 +8,10 @@ import android.content.Intent;
 import android.os.Build;
 import android.os.IBinder;
 import android.util.Log;
+import androidx.core.app.ActivityCompat;
 import androidx.core.app.NotificationCompat;
+import android.Manifest;
+import android.content.pm.PackageManager;
 import ai.picovoice.porcupine.PorcupineManager;
 import ai.picovoice.porcupine.PorcupineException;
 import ai.picovoice.porcupine.PorcupineManagerCallback;
@@ -67,6 +70,7 @@ public class PorcupainService extends Service {
             Log.d(TAG, "PorcupineManager initialized successfully");
         } catch (PorcupineException e) {
             Log.e(TAG, "Failed to initialize PorcupineManager: " + e.getMessage());
+            stopSelf();
         }
     }
 
@@ -77,6 +81,14 @@ public class PorcupainService extends Service {
             Notification notification = createNotification();
             startForeground(NOTIFICATION_ID, notification);
             Log.d(TAG, "Foreground service started with notification");
+
+            // التحقق من إذن الميكروفون قبل البدء
+            if (ActivityCompat.checkSelfPermission(this, Manifest.permission.RECORD_AUDIO) != PackageManager.PERMISSION_GRANTED) {
+                Log.e(TAG, "Microphone permission not granted, stopping service");
+                stopSelf();
+                return START_NOT_STICKY;
+            }
+
             startListening();
             startRecording();
         }
@@ -84,7 +96,20 @@ public class PorcupainService extends Service {
     }
 
     private void startRecording() {
+        // التحقق من إذن الميكروفون مرة أخرى (احتياطيًا)
+        if (ActivityCompat.checkSelfPermission(this, Manifest.permission.RECORD_AUDIO) != PackageManager.PERMISSION_GRANTED) {
+            Log.e(TAG, "Microphone permission not granted, cannot start recording");
+            stopSelf();
+            return;
+        }
+
         audioRecord = new AudioRecord(MediaRecorder.AudioSource.MIC, SAMPLE_RATE, CHANNELS, ENCODING, BUFFER_SIZE);
+        if (audioRecord.getState() != AudioRecord.STATE_INITIALIZED) {
+            Log.e(TAG, "Failed to initialize AudioRecord");
+            stopSelf();
+            return;
+        }
+
         audioRecord.startRecording();
         isRecording = true;
 
@@ -100,6 +125,7 @@ public class PorcupainService extends Service {
                 }
             }
         }).start();
+        Log.d(TAG, "Recording started successfully");
     }
 
     private void startListening() {
