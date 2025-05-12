@@ -5,7 +5,6 @@ import 'package:http/http.dart' as http;
 class AssistantService {
   final String apiKey = dotenv.env['OPENAI_API_KEY']!;
   final String model = 'gpt-4o-mini'; // نموذج سريع، ممكن تغيره
-  final List<Map<String, String>> _conversationHistory = [];
 
   // تعليمات المساعد
   final String systemPrompt = '''
@@ -22,11 +21,11 @@ class AssistantService {
     };
 
     try {
-      // إضافة تعليمات النظام والرسالة للتاريخ
-      if (_conversationHistory.isEmpty) {
-        _conversationHistory.add({'role': 'system', 'content': systemPrompt});
-      }
-      _conversationHistory.add({'role': 'user', 'content': userMessage});
+      // إنشاء قائمة مؤقتة تحتوي على الـ system prompt والرسالة الحالية
+      final List<Map<String, String>> messages = [
+        {'role': 'system', 'content': systemPrompt},
+        {'role': 'user', 'content': userMessage},
+      ];
 
       // إرسال الطلب
       final response = await http.post(
@@ -34,7 +33,7 @@ class AssistantService {
         headers: headers,
         body: json.encode({
           'model': model,
-          'messages': _conversationHistory,
+          'messages': messages,
           'stream': false, // بدون Streaming
         }),
       );
@@ -55,9 +54,6 @@ class AssistantService {
       final cleanedText = cleanResponse(content);
       print("النص بعد التنظيف: $cleanedText");
 
-      // إضافة رد المساعد للتاريخ
-      _conversationHistory.add({'role': 'assistant', 'content': cleanedText});
-
       return cleanedText;
     } catch (e) {
       print("🚨 خطأ في AssistantService: $e");
@@ -70,10 +66,5 @@ class AssistantService {
     return text
         .replaceAll(RegExp(r' '), ' ')
         .replaceAll(RegExp(r'&#x[0-9a-fA-F]+;'), '');
-  }
-
-  // ميثود لمسح التاريخ
-  void clearConversationHistory() {
-    _conversationHistory.clear();
   }
 }
