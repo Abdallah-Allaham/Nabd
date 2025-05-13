@@ -3,7 +3,8 @@ import 'package:flutter/services.dart';
 import 'package:nabd/services/tts_service.dart';
 
 class SettingScreen extends StatefulWidget {
-  const SettingScreen({super.key});
+  final bool changeVoice;
+  const SettingScreen({super.key, this.changeVoice = false});
 
   @override
   State<SettingScreen> createState() => _SettingScreenState();
@@ -19,6 +20,9 @@ class _SettingScreenState extends State<SettingScreen> {
   void initState() {
     super.initState();
     _initializeServices();
+    if (widget.changeVoice) {
+      _changeVoiceId();
+    }
   }
 
   Future<void> _initializeServices() async {
@@ -37,7 +41,7 @@ class _SettingScreenState extends State<SettingScreen> {
       setState(() {
         _voiceIdStatus = 'تم الحذف، جاري تسجيل بصمة صوت جديدة...';
       });
-      await _ttsService.speak('يرجى التحدث الآن لتسجيل بصمة صوت جديدة، تحدث لمدة ثانية');
+      await _ttsService.speak('يرجى التحدث الآن لتسجيل بصمة صوت جديدة، تحدث لمدة 7 ثوانيْ');
 
       // تسجيل صوت جديد
       final String result = await voiceIdChannel.invokeMethod('enrollVoice');
