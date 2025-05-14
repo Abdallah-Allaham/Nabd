@@ -35,7 +35,7 @@ public class VoiceIdService {
     private static final int FRAME_LENGTH = 512;
     private static final String PROFILE_FILE = "voice_profile.bin";
     private static final String AUDIO_FILE = "enroll_audio.wav";
-    private static final int RECORD_DURATION_SECONDS = 5;
+    private static final int RECORD_DURATION_SECONDS = 7;
 
     private Eagle eagle;
     private EagleProfiler eagleProfiler;
@@ -102,10 +102,19 @@ public class VoiceIdService {
                     }
                     Log.d(TAG, "Finished recording audio, total samples read: " + totalSamplesRead);
 
-                    // حفظ الصوت كملف WAV
+                    // مضاعفة البيانات لتصير 28 ثانية (4 مرات)
+                    int multiplier = 4;
+                    int multipliedSamples = totalSamples * multiplier;
+                    short[] multipliedEnrollBuffer = new short[multipliedSamples];
+                    for (int i = 0; i < multiplier; i++) {
+                        System.arraycopy(enrollBuffer, 0, multipliedEnrollBuffer, i * totalSamples, totalSamples);
+                    }
+                    Log.d(TAG, "Multiplied audio buffer to " + multipliedSamples + " samples (" + (multipliedSamples / SAMPLE_RATE) + " seconds)");
+
+                    // حفظ الصوت كملف WAV (اختياري، يمكن نزيله لو مش محتاجين)
                     Log.d(TAG, "Saving audio to WAV file...");
                     try {
-                        saveAudioToWav(context, enrollBuffer);
+                        saveAudioToWav(context, multipliedEnrollBuffer);
                         Log.d(TAG, "Audio saved successfully as " + AUDIO_FILE);
                     } catch (Exception e) {
                         Log.e(TAG, "Failed to save audio file: " + e.getMessage(), e);
@@ -122,12 +131,12 @@ public class VoiceIdService {
                             return;
                         }
                         float percentage = 0;
-                        while (percentage < 85) { // تغيير النسبة إلى 85%
-                            EagleProfilerEnrollResult feedbackResult = eagleProfiler.enroll(enrollBuffer);
+                        while (percentage < 85) {
+                            EagleProfilerEnrollResult feedbackResult = eagleProfiler.enroll(multipliedEnrollBuffer);
                             percentage = feedbackResult.getPercentage();
                             Log.d(TAG, "Enrollment percentage: " + percentage);
                             if (percentage >= 85) break;
-                            Thread.sleep(100); // تأخير اختياري
+                            Thread.sleep(100);
                         }
                         speakerProfile = eagleProfiler.export();
                         saveProfile(context, speakerProfile);

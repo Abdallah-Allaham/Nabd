@@ -37,7 +37,7 @@ class _SettingScreenState extends State<SettingScreen> {
       setState(() {
         _voiceIdStatus = 'تم الحذف، جاري تسجيل بصمة صوت جديدة...';
       });
-      await _ttsService.speak('يرجى التحدث الآن لتسجيل بصمة صوت جديدة، تحدث لمدة ثانية');
+      await _ttsService.speak('يرجى التحدث الآن لتسجيل بصمة صوت جديدة، تحدث لمدة 7 ثواني');
 
       // تسجيل صوت جديد
       final String result = await voiceIdChannel.invokeMethod('enrollVoice');
