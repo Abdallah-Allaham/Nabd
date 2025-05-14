@@ -27,11 +27,12 @@ class _HomePageState extends State<HomeScreen>
   late Animation<double> _avatarPositionAnim;
   CameraController? _cameraController;
   late List<CameraDescription> _cameras;
+  double _zoomLevel = 0.5; // قيمة التصغير الافتراضية (0.0 إلى 1.0)
 
   @override
   void initState() {
     super.initState();
-    WidgetsBinding.instance.addObserver(this); // ✅ لمراقبة حالة التطبيق
+    WidgetsBinding.instance.addObserver(this);
     _initializeVideo();
     _initializeServices();
     _avatarAnimController = AnimationController(
@@ -43,10 +44,13 @@ class _HomePageState extends State<HomeScreen>
     );
     _avatarPositionAnim = Tween<double>(
       begin:
-          MediaQueryData.fromWindow(
-                WidgetsBinding.instance.window,
-              ).size.height /
-              2 -
+      MediaQueryData
+          .fromWindow(
+        WidgetsBinding.instance.window,
+      )
+          .size
+          .height /
+          2 -
           90,
       end: 30,
     ).animate(
@@ -56,7 +60,7 @@ class _HomePageState extends State<HomeScreen>
 
   @override
   void dispose() {
-    WidgetsBinding.instance.removeObserver(this); // ✅ مهم
+    WidgetsBinding.instance.removeObserver(this);
     _controller.dispose();
     _sttService.stopListening();
     _ttsService.stop();
@@ -68,7 +72,8 @@ class _HomePageState extends State<HomeScreen>
   @override
   void didChangeAppLifecycleState(AppLifecycleState state) {
     if (state == AppLifecycleState.paused ||
-        state == AppLifecycleState.inactive) {
+        state == AppLifecycleState.inactive ||
+        state == AppLifecycleState.resumed ) {
       print("⛔️ التطبيق في الخلفية، سيتم إيقاف المساعد");
       _ttsService.stop();
       _sttService.stopListening();
@@ -124,7 +129,7 @@ class _HomePageState extends State<HomeScreen>
           print("\u{1F916} الرد من المساعد: $response");
 
           String cleaned =
-              response.replaceAll(RegExp(r'[^\w\sء-ي]'), '').trim();
+          response.replaceAll(RegExp(r'[^\w\sء-ي]'), '').trim();
 
           if (cleaned == "أعد الكلام") {
             await _ttsService.speak("أعد الكلام");
@@ -196,6 +201,9 @@ class _HomePageState extends State<HomeScreen>
         ResolutionPreset.medium,
       );
       await _cameraController!.initialize();
+      if (_cameraController!.value.isInitialized) {
+        await _cameraController!.setZoomLevel(_zoomLevel); // ضبط التصغير
+      }
     } catch (e) {
       print("\u{1F6A8} خطأ أثناء تهيئة الكاميرا: $e");
     }
@@ -217,7 +225,16 @@ class _HomePageState extends State<HomeScreen>
           if (_showCamera &&
               _cameraController != null &&
               _cameraController!.value.isInitialized)
-            Positioned.fill(child: CameraPreview(_cameraController!)),
+            Positioned.fill(
+              child: FittedBox(
+                fit: BoxFit.cover,
+                child: SizedBox(
+                  width: _cameraController!.value.previewSize!.height,
+                  height: _cameraController!.value.previewSize!.width,
+                  child: CameraPreview(_cameraController!),
+                ),
+              ),
+            ),
           AnimatedBuilder(
             animation: _avatarAnimController,
             builder: (context, child) {
@@ -232,12 +249,12 @@ class _HomePageState extends State<HomeScreen>
                   ),
                   child: ClipOval(
                     child:
-                        _controller.value.isInitialized
-                            ? AspectRatio(
-                              aspectRatio: _controller.value.aspectRatio,
-                              child: VideoPlayer(_controller),
-                            )
-                            : const CircularProgressIndicator(),
+                    _controller.value.isInitialized
+                        ? AspectRatio(
+                      aspectRatio: _controller.value.aspectRatio,
+                      child: VideoPlayer(_controller),
+                    )
+                        : const CircularProgressIndicator(),
                   ),
                 ),
               );
