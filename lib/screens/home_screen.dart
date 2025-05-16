@@ -1,40 +1,37 @@
 import 'package:flutter/material.dart';
 import 'package:nabd/utils/const_value.dart';
 import 'package:video_player/video_player.dart';
-import 'package:nabd/services/tts_service.dart';
-import 'package:nabd/services/stt_service.dart';
-import 'package:nabd/services/assistant_service.dart';
 import 'package:camera/camera.dart';
 import 'package:permission_handler/permission_handler.dart';
+import 'package:nabd/services/tts_service.dart';
+import 'package:nabd/services/stt_service.dart';
 
 class HomeScreen extends StatefulWidget {
-  const HomeScreen({Key? key}) : super(key: key);
+  final bool openCamera;
+
+  const HomeScreen({Key? key, required this.openCamera}) : super(key: key);
 
   @override
   State<HomeScreen> createState() => _HomePageState();
 }
 
-class _HomePageState extends State<HomeScreen>
-    with TickerProviderStateMixin, WidgetsBindingObserver {
+class _HomePageState extends State<HomeScreen> with TickerProviderStateMixin {
   late VideoPlayerController _controller;
   final TTSService _ttsService = TTSService();
   final STTService _sttService = STTService();
-  final AssistantService _assistantService = AssistantService();
-  bool _isListening = false;
   bool _showCamera = false;
   late AnimationController _avatarAnimController;
   late Animation<double> _avatarSizeAnim;
   late Animation<double> _avatarPositionAnim;
   CameraController? _cameraController;
   late List<CameraDescription> _cameras;
-  double _zoomLevel = 0.5; // قيمة التصغير الافتراضية (0.0 إلى 1.0)
+  final double _zoomLevel = 0.5;
 
   @override
   void initState() {
     super.initState();
-    WidgetsBinding.instance.addObserver(this);
-    _initializeVideo();
     _initializeServices();
+    _initializeVideo();
     _avatarAnimController = AnimationController(
       vsync: this,
       duration: const Duration(milliseconds: 800),
@@ -43,45 +40,40 @@ class _HomePageState extends State<HomeScreen>
       CurvedAnimation(parent: _avatarAnimController, curve: Curves.easeInOut),
     );
     _avatarPositionAnim = Tween<double>(
-      begin:
-      MediaQueryData
-          .fromWindow(
-        WidgetsBinding.instance.window,
-      )
-          .size
-          .height /
-          2 -
-          90,
+      begin: MediaQueryData.fromWindow(WidgetsBinding.instance.window).size.height / 2 - 90,
       end: 30,
     ).animate(
       CurvedAnimation(parent: _avatarAnimController, curve: Curves.easeInOut),
     );
+
+    if (widget.openCamera) {
+      _runAvatarAndOpenCamera();
+    }
+  }
+
+  @override
+  void didUpdateWidget(covariant HomeScreen oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (widget.openCamera != oldWidget.openCamera && widget.openCamera) {
+      _runAvatarAndOpenCamera();
+    }
   }
 
   @override
   void dispose() {
-    WidgetsBinding.instance.removeObserver(this);
     _controller.dispose();
-    _sttService.stopListening();
-    _ttsService.stop();
     _avatarAnimController.dispose();
     _cameraController?.dispose();
+    _ttsService.stop();
     super.dispose();
   }
 
-  @override
-  void didChangeAppLifecycleState(AppLifecycleState state) {
-    if (state == AppLifecycleState.paused ||
-        state == AppLifecycleState.inactive ||
-        state == AppLifecycleState.resumed ) {
-      print("⛔️ التطبيق في الخلفية، سيتم إيقاف المساعد");
-      _ttsService.stop();
-      _sttService.stopListening();
-      setState(() => _isListening = false);
-    } else if (state == AppLifecycleState.resumed) {
-      print("✅ عاد التطبيق إلى الواجهة، سيتم إعادة التشغيل");
-      _initializeServices();
-    }
+  Future<void> _initializeServices() async {
+    await _ttsService.initialize();
+    await _sttService.stopListening();
+    await _ttsService.stop();
+    await _ttsService.speak("انتقلت إلى الصفحة الرئيسية");
+    await Future.delayed(const Duration(milliseconds: 500));
   }
 
   Future<void> _initializeVideo() async {
@@ -92,93 +84,56 @@ class _HomePageState extends State<HomeScreen>
     if (mounted) setState(() {});
   }
 
-  Future<void> _initializeServices() async {
-    await _ttsService.initialize();
-    await _sttService.initSpeech();
-    await _ttsService.speak("جاهز للمساعدة");
-    await Future.delayed(const Duration(milliseconds: 600));
-    await _startListening();
-  }
-
-  Future<void> _startListening() async {
-    if (!_isListening && mounted && !_showCamera) {
-      setState(() {
-        _isListening = true;
-      });
-      await _sttService.startListening();
-      _checkForCommand();
-    }
-  }
-
-  void _checkForCommand() {
-    Future.delayed(const Duration(seconds: 6), () async {
-      if (_showCamera) return;
-
-      if (_sttService.lastWords.isNotEmpty && mounted) {
-        String command = _sttService.lastWords;
-        print("\u{1F4AC} سيتم إرسال الأمر إلى المساعد: $command");
-
-        _sttService.clearLastWords();
-        await _sttService.stopListening();
-        if (mounted) setState(() => _isListening = false);
-
-        try {
-          String response = await _assistantService.sendMessageToAssistant(
-            command,
-          );
-          print("\u{1F916} الرد من المساعد: $response");
-
-          String cleaned =
-          response.replaceAll(RegExp(r'[^\w\sء-ي]'), '').trim();
-
-          if (cleaned == "أعد الكلام") {
-            await _ttsService.speak("أعد الكلام");
-            await Future.delayed(const Duration(milliseconds: 600));
-            await _startListening();
-          } else if (cleaned.contains("تم التنفيذ")) {
-            await _ttsService.speak("تم التنفيذ");
-            await _runAvatarAndOpenCamera();
-          } else {
-            await _ttsService.speak(response);
-            await Future.delayed(const Duration(milliseconds: 600));
-            await _startListening();
-          }
-        } catch (e) {
-          print("\u{1F6A8} خطأ أثناء التواصل مع المساعد: $e");
-          await _ttsService.speak("حدث خطأ، حاول مرة أخرى");
-          await Future.delayed(const Duration(milliseconds: 600));
-          await _startListening();
-        }
-      } else if (mounted && _isListening && _sttService.lastWords.isEmpty) {
-        print("⛔️ لم يتم التقاط أي كلام من المستخدم");
-
-        await _sttService.stopListening();
-        if (mounted) setState(() => _isListening = false);
-
-        await _ttsService.speak("لم أسمع شيئًا");
-        await Future.delayed(const Duration(seconds: 1));
-        await _startListening();
-      }
-    });
-  }
-
   Future<void> _runAvatarAndOpenCamera() async {
+    print("📷 محاولة فتح الكاميرا...");
     if (mounted) await _avatarAnimController.forward();
 
     final granted = await _checkCameraPermission();
     if (!granted) {
+      print("❌ لا يوجد إذن للكاميرا!");
+      await _sttService.stopListening();
+      await _ttsService.stop();
       await _ttsService.speak("لا يمكن فتح الكاميرا، لم يتم منح الإذن");
+      await Future.delayed(const Duration(milliseconds: 500));
       return;
     }
 
-    await _initializeCamera();
-
-    if (mounted &&
-        _cameraController != null &&
-        _cameraController!.value.isInitialized) {
-      setState(() {
-        _showCamera = true;
-      });
+    try {
+      _cameras = await availableCameras();
+      if (_cameras.isEmpty) {
+        print("❌ لا توجد كاميرات متاحة!");
+        await _sttService.stopListening();
+        await _ttsService.stop();
+        await _ttsService.speak("لا توجد كاميرا متاحة");
+        await Future.delayed(const Duration(milliseconds: 500));
+        return;
+      }
+      _cameraController = CameraController(_cameras.first, ResolutionPreset.medium);
+      await _cameraController!.initialize();
+      if (_cameraController!.value.isInitialized) {
+        await _cameraController!.setZoomLevel(_zoomLevel);
+        if (mounted) {
+          setState(() {
+            _showCamera = true;
+          });
+          await _sttService.stopListening();
+          await _ttsService.stop();
+          await _ttsService.speak("تم فتح الكاميرا");
+          await Future.delayed(const Duration(milliseconds: 500));
+        }
+      } else {
+        print("❌ فشل تهيئة الكاميرا!");
+        await _sttService.stopListening();
+        await _ttsService.stop();
+        await _ttsService.speak("فشل فتح الكاميرا، حاول مرة أخرى");
+        await Future.delayed(const Duration(milliseconds: 500));
+      }
+    } catch (e) {
+      print("🚨 خطأ أثناء فتح الكاميرا: $e");
+      await _sttService.stopListening();
+      await _ttsService.stop();
+      await _ttsService.speak("حدث خطأ أثناء فتح الكاميرا، حاول مرة أخرى");
+      await Future.delayed(const Duration(milliseconds: 500));
     }
   }
 
@@ -187,26 +142,6 @@ class _HomePageState extends State<HomeScreen>
     if (status.isGranted) return true;
     final result = await Permission.camera.request();
     return result.isGranted;
-  }
-
-  Future<void> _initializeCamera() async {
-    try {
-      _cameras = await availableCameras();
-      if (_cameras.isEmpty) {
-        print("\u{1F6AB} لا توجد كاميرات متاحة");
-        return;
-      }
-      _cameraController = CameraController(
-        _cameras.first,
-        ResolutionPreset.medium,
-      );
-      await _cameraController!.initialize();
-      if (_cameraController!.value.isInitialized) {
-        await _cameraController!.setZoomLevel(_zoomLevel); // ضبط التصغير
-      }
-    } catch (e) {
-      print("\u{1F6A8} خطأ أثناء تهيئة الكاميرا: $e");
-    }
   }
 
   @override
@@ -222,9 +157,7 @@ class _HomePageState extends State<HomeScreen>
       child: Stack(
         alignment: Alignment.center,
         children: [
-          if (_showCamera &&
-              _cameraController != null &&
-              _cameraController!.value.isInitialized)
+          if (_showCamera && _cameraController != null && _cameraController!.value.isInitialized)
             Positioned.fill(
               child: FittedBox(
                 fit: BoxFit.cover,
@@ -248,8 +181,7 @@ class _HomePageState extends State<HomeScreen>
                     shape: BoxShape.circle,
                   ),
                   child: ClipOval(
-                    child:
-                    _controller.value.isInitialized
+                    child: _controller.value.isInitialized
                         ? AspectRatio(
                       aspectRatio: _controller.value.aspectRatio,
                       child: VideoPlayer(_controller),

@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:nabd/services/tts_service.dart';
+import 'package:nabd/services/stt_service.dart';
 
 class SettingScreen extends StatefulWidget {
   const SettingScreen({super.key});
@@ -11,6 +12,7 @@ class SettingScreen extends StatefulWidget {
 
 class _SettingScreenState extends State<SettingScreen> {
   final TTSService _ttsService = TTSService();
+  final STTService _sttService = STTService();
   static const voiceIdChannel = MethodChannel('nabd/voiceid');
   bool _isProcessing = false;
   String _voiceIdStatus = '';
@@ -23,6 +25,10 @@ class _SettingScreenState extends State<SettingScreen> {
 
   Future<void> _initializeServices() async {
     await _ttsService.initialize();
+    await _sttService.stopListening();
+    await _ttsService.stop();
+    await _ttsService.speak("انتقلت إلى الإعدادات");
+    await Future.delayed(const Duration(milliseconds: 500));
   }
 
   Future<void> _changeVoiceId() async {
@@ -32,31 +38,41 @@ class _SettingScreenState extends State<SettingScreen> {
     });
 
     try {
-      // حذف الصوت القديم
       await voiceIdChannel.invokeMethod('resetEnrollment');
       setState(() {
         _voiceIdStatus = 'تم الحذف، جاري تسجيل بصمة صوت جديدة...';
       });
+      await _sttService.stopListening();
+      await _ttsService.stop();
       await _ttsService.speak('يرجى التحدث الآن لتسجيل بصمة صوت جديدة، تحدث لمدة 7 ثواني');
+      await Future.delayed(const Duration(milliseconds: 500));
 
-      // تسجيل صوت جديد
       final String result = await voiceIdChannel.invokeMethod('enrollVoice');
       if (result == "Voice enrolled successfully") {
         setState(() {
           _voiceIdStatus = 'تم تسجيل بصمة الصوت الجديدة بنجاح';
         });
+        await _sttService.stopListening();
+        await _ttsService.stop();
         await _ttsService.speak('تم تسجيل بصمة الصوت الجديدة بنجاح');
+        await Future.delayed(const Duration(milliseconds: 500));
       } else {
         setState(() {
           _voiceIdStatus = 'فشل تسجيل بصمة الصوت، حاول مرة أخرى';
         });
+        await _sttService.stopListening();
+        await _ttsService.stop();
         await _ttsService.speak('فشل تسجيل بصمة الصوت، حاول مرة أخرى');
+        await Future.delayed(const Duration(milliseconds: 500));
       }
     } catch (e) {
       setState(() {
         _voiceIdStatus = 'حدث خطأ: $e';
       });
+      await _sttService.stopListening();
+      await _ttsService.stop();
       await _ttsService.speak('حدث خطأ أثناء تغيير بصمة الصوت، حاول مرة أخرى');
+      await Future.delayed(const Duration(milliseconds: 500));
     } finally {
       setState(() {
         _isProcessing = false;
@@ -74,69 +90,65 @@ class _SettingScreenState extends State<SettingScreen> {
   Widget build(BuildContext context) {
     return Scaffold(
       body: Container(
-        decoration: BoxDecoration(
+        decoration: const BoxDecoration(
           gradient: LinearGradient(
             begin: Alignment.topCenter,
             end: Alignment.bottomCenter,
             colors: [Color(0xFF0A286D), Color(0xFF151922)],
           ),
         ),
-        child: Stack(
-          children: [
-            Center(
-              child: Column(
-                mainAxisAlignment: MainAxisAlignment.center,
-                crossAxisAlignment: CrossAxisAlignment.center,
-                children: [
-                  Text(
-                    'إعدادات التطبيق',
-                    style: TextStyle(
-                      color: Colors.white,
-                      fontSize: 28,
-                      fontWeight: FontWeight.bold,
-                    ),
-                  ),
-                  SizedBox(height: 40),
-                  ElevatedButton.icon(
-                    onPressed: _isProcessing ? null : _changeVoiceId,
-                    icon: Icon(
-                      Icons.mic,
-                      color: Colors.white,
-                      size: 28,
-                    ),
-                    label: Text(
-                      'تغيير بصمة الصوت',
-                      style: TextStyle(
-                        fontSize: 18,
-                        color: Colors.white,
-                      ),
-                    ),
-                    style: ElevatedButton.styleFrom(
-                      backgroundColor: Colors.blueAccent.withOpacity(0.8),
-                      padding: EdgeInsets.symmetric(horizontal: 30, vertical: 15),
-                      shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(25),
-                      ),
-                      elevation: 5,
-                    ),
-                  ),
-                  SizedBox(height: 20),
-                  if (_voiceIdStatus.isNotEmpty)
-                    Padding(
-                      padding: const EdgeInsets.symmetric(vertical: 10),
-                      child: Text(
-                        _voiceIdStatus,
-                        style: TextStyle(
-                          color: Colors.white70,
-                          fontSize: 16,
-                        ),
-                        textAlign: TextAlign.center,
-                      ),
-                    ),
-                ],
+        child: Center(
+          child: Column(
+            mainAxisAlignment: MainAxisAlignment.center,
+            crossAxisAlignment: CrossAxisAlignment.center,
+            children: [
+              const Text(
+                'إعدادات التطبيق',
+                style: TextStyle(
+                  color: Colors.white,
+                  fontSize: 28,
+                  fontWeight: FontWeight.bold,
+                ),
               ),
-            ),
-          ],
+              const SizedBox(height: 40),
+              ElevatedButton.icon(
+                onPressed: _isProcessing ? null : _changeVoiceId,
+                icon: const Icon(
+                  Icons.mic,
+                  color: Colors.white,
+                  size: 28,
+                ),
+                label: const Text(
+                  'تغيير بصمة الصوت',
+                  style: TextStyle(
+                    fontSize: 18,
+                    color: Colors.white,
+                  ),
+                ),
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: Colors.blueAccent.withOpacity(0.8),
+                  padding: const EdgeInsets.symmetric(horizontal: 30, vertical: 15),
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(25),
+                  ),
+                  elevation: 5,
+                ),
+              ),
+              const SizedBox(height: 20),
+              if (_voiceIdStatus.isNotEmpty)
+                Padding(
+                  padding: const EdgeInsets.symmetric(vertical: 10),
+                  child: Text(
+                    _voiceIdStatus,
+                    style: const TextStyle(
+                      color: Colors.white70,
+                      fontSize: 16,
+                    ),
+                    textAlign: TextAlign.center,
+                  ),
+                ),
+            ],
+          ),
         ),
       ),
     );
