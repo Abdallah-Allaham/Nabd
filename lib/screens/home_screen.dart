@@ -59,6 +59,7 @@ class _HomePageState extends State<HomeScreen> with TickerProviderStateMixin {
     }
   }
 
+
   @override
   void dispose() {
     _controller.dispose();

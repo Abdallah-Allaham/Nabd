@@ -24,7 +24,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
     await _ttsService.initialize();
     await _sttService.stopListening();
     await _ttsService.stop();
-    await _ttsService.speak("انتقلت إلى الملف الشخصي");
+    await _ttsService.speak("أنتقلت إلى الملف الشخصي");
     await Future.delayed(const Duration(milliseconds: 500)); // تأخير قصير
   }
 

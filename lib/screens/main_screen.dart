@@ -14,7 +14,8 @@ class MainScreen extends StatefulWidget {
   State<MainScreen> createState() => _MainScreenState();
 }
 
-class _MainScreenState extends State<MainScreen> with WidgetsBindingObserver, SingleTickerProviderStateMixin {
+class _MainScreenState extends State<MainScreen>
+    with WidgetsBindingObserver, SingleTickerProviderStateMixin {
   int _selectedIndex = 1;
   bool _openCamera = false;
   late TabController _tabController;
@@ -36,7 +37,11 @@ class _MainScreenState extends State<MainScreen> with WidgetsBindingObserver, Si
   @override
   void initState() {
     super.initState();
-    _tabController = TabController(length: 3, vsync: this, initialIndex: _selectedIndex);
+    _tabController = TabController(
+      length: 3,
+      vsync: this,
+      initialIndex: _selectedIndex,
+    );
     _tabController.addListener(() {
       if (!_tabController.indexIsChanging) {
         setState(() {
@@ -61,8 +66,9 @@ class _MainScreenState extends State<MainScreen> with WidgetsBindingObserver, Si
 
   @override
   void didChangeAppLifecycleState(AppLifecycleState state) {
-    if (state == AppLifecycleState.paused || state == AppLifecycleState.inactive) {
-      print("⛔️ التطبيق في الخلفية، سيتم إيقاف المساعد");
+    if (state == AppLifecycleState.paused ||
+        state == AppLifecycleState.inactive) {
+      print("⛔ التطبيق في الخلفية، سيتم إيقاف المساعد");
       _ttsService.stop();
       _sttService.stopListening();
       setState(() {
@@ -150,10 +156,13 @@ class _MainScreenState extends State<MainScreen> with WidgetsBindingObserver, Si
         if (mounted) setState(() => _isListening = false);
 
         try {
-          String response = await _assistantService.sendMessageToAssistant(command);
+          String response = await _assistantService.sendMessageToAssistant(
+            command,
+          );
           print("\u{1F916} الرد من المساعد: $response");
 
-          String cleaned = response.replaceAll(RegExp(r'[^\w\sء-ي]'), '').trim();
+          String cleaned =
+              response.replaceAll(RegExp(r'[^\w\sء-ي]'), '').trim();
 
           if (cleaned == "0") {
             setState(() {
@@ -162,6 +171,7 @@ class _MainScreenState extends State<MainScreen> with WidgetsBindingObserver, Si
               _tabController.index = _selectedIndex;
               _pages[1] = HomeScreen(openCamera: _openCamera);
             });
+            await Future.delayed(Duration(seconds: 3));
             await _startListening();
           } else if (cleaned == "1") {
             setState(() {
@@ -170,6 +180,7 @@ class _MainScreenState extends State<MainScreen> with WidgetsBindingObserver, Si
               _tabController.index = _selectedIndex;
               _pages[1] = HomeScreen(openCamera: _openCamera);
             });
+            await Future.delayed(Duration(seconds: 3));
             await _startListening();
           } else if (cleaned == "2") {
             setState(() {
@@ -178,6 +189,7 @@ class _MainScreenState extends State<MainScreen> with WidgetsBindingObserver, Si
               _tabController.index = _selectedIndex;
               _pages[1] = HomeScreen(openCamera: _openCamera);
             });
+            await Future.delayed(Duration(seconds: 3));
             await _startListening();
           } else if (cleaned.contains("تم التنفيذ")) {
             if (_selectedIndex == 1) {
@@ -188,24 +200,29 @@ class _MainScreenState extends State<MainScreen> with WidgetsBindingObserver, Si
                 _pages[1] = HomeScreen(openCamera: _openCamera);
               });
             } else {
-              await _speakWithControl("أنت لست في الصفحة الرئيسية");
+              await _speakWithControl("أنت لست في الصفحةْ الرئيسيةْ");
             }
+            await Future.delayed(Duration(seconds: 3));
             await _startListening();
           } else if (cleaned.contains("اعد الكلام")) {
-            await _speakWithControl("أعد الكلام");
+            await _speakWithControl("أَعْدْ الكلام");
+            await Future.delayed(Duration(seconds: 2));
             await _startListening();
-          } else {
-          }
+          } else {}
         } catch (e) {
           print("\u{1F6A8} خطأ أثناء التواصل مع المساعد: $e");
           await _speakWithControl("حدث خطأ، حاول مرة أخرى");
+          await Future.delayed(Duration(seconds: 3));
           await _startListening();
         }
       } else if (mounted && _isListening) {
         print("🎙️ لم يتم التقاط أي كلام، إعادة الاستماع...");
         await _sttService.stopListening();
         if (mounted) setState(() => _isListening = false);
+        await Future.delayed(Duration(seconds: 3));
         await _startListening();
+      }else{
+       await _startListening();
       }
     });
   }
