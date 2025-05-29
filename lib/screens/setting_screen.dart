@@ -25,6 +25,8 @@ class _SettingScreenState extends State<SettingScreen> {
     _initializeServices();
   }
 
+
+
   Future<void> _initializeServices() async {
     await _ttsService.initialize();
     await _sttService.stopListening();
