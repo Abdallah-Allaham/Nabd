@@ -2,6 +2,8 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:nabd/services/tts_service.dart';
 import 'package:nabd/services/stt_service.dart';
+import 'package:nabd/utils/audio_helper.dart';
+
 
 class SettingScreen extends StatefulWidget {
   const SettingScreen({super.key});
@@ -27,8 +29,9 @@ class _SettingScreenState extends State<SettingScreen> {
     await _ttsService.initialize();
     await _sttService.stopListening();
     await _ttsService.stop();
-    await _ttsService.speak("انتقلت إلى الإعدادات");
-    await Future.delayed(const Duration(milliseconds: 500));
+final player = await AudioHelper.playAssetSound('assets/sounds/IWentToSettings.mp3');
+        await player.onPlayerComplete.first;   
+        await Future.delayed(const Duration(milliseconds: 500));
   }
 
   Future<void> _changeVoiceId() async {
@@ -44,8 +47,9 @@ class _SettingScreenState extends State<SettingScreen> {
       });
       await _sttService.stopListening();
       await _ttsService.stop();
-      await _ttsService.speak('يرجى التحدث الآن لتسجيل بصمة صوت جديدة، تحدث لمدة 7 ثواني');
-      await Future.delayed(const Duration(milliseconds: 500));
+final player = await AudioHelper.playAssetSound('assets/sounds/RegisterANewVoicePrint.mp3');
+        await player.onPlayerComplete.first;     
+        await Future.delayed(const Duration(milliseconds: 500));
 
       final String result = await voiceIdChannel.invokeMethod('enrollVoice');
       if (result == "Voice enrolled successfully") {
@@ -54,7 +58,8 @@ class _SettingScreenState extends State<SettingScreen> {
         });
         await _sttService.stopListening();
         await _ttsService.stop();
-        await _ttsService.speak('تم تسجيل بصمة الصوت الجديدة بنجاح');
+final player = await AudioHelper.playAssetSound('assets/sounds/NewVoiceprintRegistrationSuccessfully.mp3');
+        await player.onPlayerComplete.first;        
         await Future.delayed(const Duration(milliseconds: 500));
       } else {
         setState(() {
@@ -62,7 +67,8 @@ class _SettingScreenState extends State<SettingScreen> {
         });
         await _sttService.stopListening();
         await _ttsService.stop();
-        await _ttsService.speak('فشل تسجيل بصمة الصوت، حاول مرة أخرى');
+final player = await AudioHelper.playAssetSound('assets/sounds/VoiceprintRegistrationFailed.mp3');
+        await player.onPlayerComplete.first;        
         await Future.delayed(const Duration(milliseconds: 500));
       }
     } catch (e) {
@@ -71,8 +77,9 @@ class _SettingScreenState extends State<SettingScreen> {
       });
       await _sttService.stopListening();
       await _ttsService.stop();
-      await _ttsService.speak('حدث خطأ أثناء تغيير بصمة الصوت، حاول مرة أخرى');
-      await Future.delayed(const Duration(milliseconds: 500));
+final player = await AudioHelper.playAssetSound('assets/sounds/AnErrorOccurredWhileChangingTheVoicePrint.mp3');
+        await player.onPlayerComplete.first;     
+        await Future.delayed(const Duration(milliseconds: 500));
     } finally {
       setState(() {
         _isProcessing = false;
