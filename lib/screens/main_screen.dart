@@ -201,19 +201,21 @@ class _MainScreenState extends State<MainScreen>
                 _pages[1] = HomeScreen(openCamera: _openCamera);
               });
             } else {
-              await _speakWithControl("أنت لست في الصفحةْ الرئيسيةْ");
-            }
+final player = await AudioHelper.playAssetSound('assets/sounds/YouAreNotOnTheHomePage.mp3');
+        await player.onPlayerComplete.first;             }
             await Future.delayed(Duration(seconds: 3));
             await _startListening();
           } else if (cleaned.contains("اعد الكلام")) {
-            await _speakWithControl("أَعْدْ الكلام");
-            await Future.delayed(Duration(seconds: 2));
+final player = await AudioHelper.playAssetSound('assets/sounds/SpeakAgain.mp3');
+        await player.onPlayerComplete.first;
+        await Future.delayed(Duration(seconds: 2));
             await _startListening();
           } else {}
         } catch (e) {
           print("\u{1F6A8} خطأ أثناء التواصل مع المساعد: $e");
-          await _speakWithControl("حدث خطأ، حاول مرة أخرى");
-          await Future.delayed(Duration(seconds: 3));
+final player = await AudioHelper.playAssetSound('assets/sounds/SomethingWentWrong.mp3');
+        await player.onPlayerComplete.first;
+        await Future.delayed(Duration(seconds: 3));
           await _startListening();
         }
       } else if (mounted && _isListening) {
