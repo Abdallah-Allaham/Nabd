@@ -70,6 +70,7 @@ public class PorcupainService extends Service {
             Log.d(TAG, "PorcupineManager initialized successfully");
         } catch (PorcupineException e) {
             Log.e(TAG, "Failed to initialize PorcupineManager: " + e.getMessage());
+            porcupineManager = null; // هذا مهم لتجنب استخدامه لاحقًا
             stopSelf();
         }
     }
@@ -129,6 +130,12 @@ public class PorcupainService extends Service {
     }
 
     private void startListening() {
+        if (porcupineManager == null) {
+            Log.e(TAG, "PorcupineManager is null. Cannot start listening.");
+            stopSelf();
+            return;
+        }
+
         try {
             porcupineManager.start();
             Log.d(TAG, "PorcupineManager started listening");
