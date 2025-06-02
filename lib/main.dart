@@ -30,7 +30,7 @@ class _MyAppState extends State<MyApp> with WidgetsBindingObserver {
     requestBatteryIgnorePermission();
     requestOverlayPermission();
     checkAccessibilityPermission();
-    requestMicrophonePermission(); // ← إضافة طلب إذن الميكروفون
+    requestMicrophonePermission();
   }
 
   @override

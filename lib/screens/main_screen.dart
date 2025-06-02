@@ -19,48 +19,39 @@ class _MainScreenState extends State<MainScreen>
   int _selectedIndex = 1;
   bool _openCamera = false;
   late TabController _tabController;
-  String? _lastCommand;
+
   bool _isSpeaking = false;
   bool _isListening = false;
   String? _lastSpokenText;
-
-  final List<Widget> _pages = [
-    const ProfileScreen(),
-    HomeScreen(openCamera: false),
-    const SettingScreen(),
-  ];
+  String? _lastCommand;
 
   final TTSService _ttsService = TTSService();
   final STTService _sttService = STTService();
   final AssistantService _assistantService = AssistantService();
 
+  List<Widget> get _pages => [
+    const ProfileScreen(),
+    HomeScreen(openCamera: _openCamera),
+    const SettingScreen(),
+  ];
+
   @override
   void initState() {
     super.initState();
-    _tabController = TabController(
-      length: 3,
-      vsync: this,
-      initialIndex: _selectedIndex,
-    );
-    _tabController.addListener(() {
-      if (!_tabController.indexIsChanging) {
-        setState(() {
-          _selectedIndex = _tabController.index;
-          _openCamera = false;
-          _pages[1] = HomeScreen(openCamera: _openCamera);
-        });
-      }
-    });
     WidgetsBinding.instance.addObserver(this);
+
+    _tabController = TabController(length: 3, vsync: this, initialIndex: _selectedIndex)
+      ..addListener(_onTabChanged);
+
     _initializeServices();
   }
 
   @override
   void dispose() {
-    _tabController.dispose();
     WidgetsBinding.instance.removeObserver(this);
-    _sttService.stopListening();
+    _tabController.dispose();
     _ttsService.stop();
+    _sttService.stopListening();
     super.dispose();
   }
 
@@ -68,16 +59,14 @@ class _MainScreenState extends State<MainScreen>
   void didChangeAppLifecycleState(AppLifecycleState state) {
     if (state == AppLifecycleState.paused ||
         state == AppLifecycleState.inactive) {
-      print("⛔ التطبيق في الخلفية، سيتم إيقاف المساعد");
       _ttsService.stop();
       _sttService.stopListening();
-      setState(() {
-        _isListening = false;
-        _isSpeaking = false;
-      });
+      _isListening = false;
+      _isSpeaking = false;
     } else if (state == AppLifecycleState.resumed) {
-      print("✅ عاد التطبيق إلى الواجهة، سيتم إعادة التشغيل");
-      _initializeServices();
+      if (!_openCamera) {
+        _initializeServices();
+      }
     }
   }
 
@@ -85,146 +74,132 @@ class _MainScreenState extends State<MainScreen>
     await _ttsService.initialize();
     await _sttService.initSpeech();
     await _speakWithControl("جاهز للمساعدة");
-    await _startListening();
   }
 
   Future<void> _speakWithControl(String text) async {
-    if (_isSpeaking) {
-      await _ttsService.stop();
-    }
-    setState(() {
-      _isSpeaking = true;
-      _lastSpokenText = text;
-    });
+    if (_isSpeaking) await _ttsService.stop();
+    _isSpeaking = true;
+    _lastSpokenText = text;
+
     await _sttService.stopListening();
-    setState(() => _isListening = false);
-    print("🔊 بدء التحدث: $text");
+    _isListening = false;
 
-    // الـ await هنا هينتظر اكتمال الصوت بسبب awaitSpeakCompletion(true)
     await _ttsService.speak(text);
+    _isSpeaking = false;
 
-    setState(() => _isSpeaking = false);
-    print("🔊 انتهى التحدث: $text");
-    await _startListening();
+    if (!_openCamera) _startListening();
   }
 
   Future<void> _startListening() async {
-    if (!_isListening && !_isSpeaking && mounted) {
-      print("🎙️ بدء الاستماع...");
-      try {
-        setState(() => _isListening = true);
-        await _sttService.startListening();
-        _checkForCommand();
-      } catch (e) {
-        print("🚨 خطأ أثناء بدء الاستماع: $e");
-        setState(() => _isListening = false);
-        await _speakWithControl("حدث خطأ في الاستماع، سأحاول مرة أخرى");
-      }
-    } else if (_isSpeaking) {
-      print("🎙️ الـ TTS شغال، بيتم الانتظار...");
+    if (_isListening || _isSpeaking) return;
+    _isListening = true;
+    try {
+      await _sttService.startListening();
+      _checkForCommand();
+    } catch (_) {
+      _isListening = false;
+      await _speakWithControl("حدث خطأ في الاستماع، سأحاول مرة أخرى");
     }
   }
 
   void _checkForCommand() {
     Future.delayed(const Duration(seconds: 6), () async {
-      if (_sttService.lastWords.isNotEmpty && mounted) {
-        String command = _sttService.lastWords;
-        print("\u{1F4AC} الكلام الملتقط: $command");
-
-        // تجاهل الكلام لو هو نفس النص اللي قاله الـ TTS
-        if (_lastSpokenText != null && command.contains(_lastSpokenText!)) {
-          print("🚫 الكلام الملتقط من الـ TTS، بيتم تجاهله: $command");
-          _sttService.clearLastWords();
-          await _sttService.stopListening();
-          if (mounted) setState(() => _isListening = false);
-          await _startListening();
-          return;
-        }
-
-        if (_lastCommand == command) {
-          print("🔁 تم تجاهل الأمر المتكرر: $command");
-          _sttService.clearLastWords();
-          await _sttService.stopListening();
-          if (mounted) setState(() => _isListening = false);
-          await _startListening();
-          return;
-        }
-        _lastCommand = command;
-
+      if (!mounted) return;
+      final cmd = _sttService.lastWords;
+      if (cmd.isEmpty) {
+        await _sttService.stopListening();
+        _isListening = false;
+        return _startListening();
+      }
+      // تجاهل كلام الـ TTS
+      if (_lastSpokenText != null && cmd.contains(_lastSpokenText!)) {
         _sttService.clearLastWords();
         await _sttService.stopListening();
-        if (mounted) setState(() => _isListening = false);
+        _isListening = false;
+        return _startListening();
+      }
+      if (_lastCommand == cmd) {
+        _sttService.clearLastWords();
+        await _sttService.stopListening();
+        _isListening = false;
+        return _startListening();
+      }
+      _lastCommand = cmd;
 
-        try {
-          String response = await _assistantService.sendMessageToAssistant(
-            command,
-          );
-          print("\u{1F916} الرد من المساعد: $response");
+      _sttService.clearLastWords();
+      await _sttService.stopListening();
+      _isListening = false;
 
-          String cleaned =
-              response.replaceAll(RegExp(r'[^\w\sء-ي]'), '').trim();
+      try {
+        final resp = await _assistantService.sendMessageToAssistant(cmd);
+        final cleaned = resp.replaceAll(RegExp(r'[^\w\sء-ي]'), '').trim();
 
-          if (cleaned == "0") {
+        switch (cleaned) {
+          case "0":
+            _tabController.animateTo(0);
             setState(() {
               _selectedIndex = 0;
               _openCamera = false;
-              _tabController.index = _selectedIndex;
-              _pages[1] = HomeScreen(openCamera: _openCamera);
             });
-            await Future.delayed(Duration(seconds: 3));
-            await _startListening();
-          } else if (cleaned == "1") {
+            await Future.delayed(const Duration(milliseconds: 300));
+            return _startListening();
+          case "1":
+            _tabController.animateTo(1);
             setState(() {
               _selectedIndex = 1;
               _openCamera = false;
-              _tabController.index = _selectedIndex;
-              _pages[1] = HomeScreen(openCamera: _openCamera);
             });
-            await Future.delayed(Duration(seconds: 3));
-            await _startListening();
-          } else if (cleaned == "2") {
+            await Future.delayed(const Duration(milliseconds: 300));
+            return _startListening();
+          case "2":
+            _tabController.animateTo(2);
             setState(() {
               _selectedIndex = 2;
               _openCamera = false;
-              _tabController.index = _selectedIndex;
-              _pages[1] = HomeScreen(openCamera: _openCamera);
             });
-            await Future.delayed(Duration(seconds: 3));
-            await _startListening();
-          } else if (cleaned.contains("تم التنفيذ")) {
-            if (_selectedIndex == 1) {
+            await Future.delayed(const Duration(milliseconds: 300));
+            return _startListening();
+          default:
+            if (cleaned.contains("تم التنفيذ")) {
+              await _ttsService.stop();
+              await _sttService.stopListening();
               setState(() {
                 _selectedIndex = 1;
                 _openCamera = true;
-                _tabController.index = _selectedIndex;
-                _pages[1] = HomeScreen(openCamera: _openCamera);
               });
+            } else if (cleaned.contains("اعد الكلام")) {
+              return _speakWithControl("أَعِدْ الكلام");
             } else {
-              await _speakWithControl("أنت لست في الصفحةْ الرئيسيةْ");
+              return _speakWithControl("لم أفهم، أعد المحاولة");
             }
-            await Future.delayed(Duration(seconds: 3));
-            await _startListening();
-          } else if (cleaned.contains("اعد الكلام")) {
-            await _speakWithControl("أَعْدْ الكلام");
-            await Future.delayed(Duration(seconds: 2));
-            await _startListening();
-          } else {}
-        } catch (e) {
-          print("\u{1F6A8} خطأ أثناء التواصل مع المساعد: $e");
-          await _speakWithControl("حدث خطأ، حاول مرة أخرى");
-          await Future.delayed(Duration(seconds: 3));
-          await _startListening();
         }
-      } else if (mounted && _isListening) {
-        print("🎙️ لم يتم التقاط أي كلام، إعادة الاستماع...");
-        await _sttService.stopListening();
-        if (mounted) setState(() => _isListening = false);
-        await Future.delayed(Duration(seconds: 3));
-        await _startListening();
-      }else{
-       await _startListening();
+      } catch (e) {
+        await _speakWithControl("حدث خطأ، حاول مرة أخرى");
       }
     });
+  }
+
+  Future<void> _onTabChanged() async {
+    if (_tabController.indexIsChanging) return;
+    await _ttsService.stop();
+    await _sttService.stopListening();
+    final cameFromCamera = _openCamera;
+    setState(() {
+      _selectedIndex = _tabController.index;
+      _openCamera = false;
+    });
+    switch (_selectedIndex) {
+      case 0:
+        await _ttsService.speak("انتقلت إلى الملف الشخصي");
+        break;
+      case 1:
+        await _ttsService.speak("انتقلت إلى الصفحة الرئيسية");
+        break;
+      case 2:
+        await _ttsService.speak("انتقلت إلى الإعدادات");
+        break;
+    }
+    _startListening();
   }
 
   @override
@@ -240,7 +215,7 @@ class _MainScreenState extends State<MainScreen>
         ],
         backgroundColor: Colors.white,
         color: const Color.fromARGB(255, 123, 123, 123),
-        activeColor: Color.fromARGB(255, 15, 58, 107),
+        activeColor: const Color.fromARGB(255, 15, 58, 107),
         style: TabStyle.reactCircle,
       ),
     );

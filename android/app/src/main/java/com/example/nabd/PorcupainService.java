@@ -23,6 +23,7 @@ public class PorcupainService extends Service {
     private static final String TAG = "PorcupainService";
     private static final String CHANNEL_ID = "WakeWordChannel";
     private static final int NOTIFICATION_ID = 1;
+
     private PorcupineManager porcupineManager;
     private boolean isRunning = false;
     private NotificationManager notificationManager;
@@ -33,6 +34,7 @@ public class PorcupainService extends Service {
     private static final int ENCODING = AudioFormat.ENCODING_PCM_16BIT;
     private static final int FRAME_LENGTH = 512;
     private static final int BUFFER_SIZE = AudioRecord.getMinBufferSize(SAMPLE_RATE, CHANNELS, ENCODING);
+
     private AudioRecord audioRecord;
     private short[] audioBuffer;
     private int bufferIndex = 0;
@@ -44,19 +46,24 @@ public class PorcupainService extends Service {
     public void onCreate() {
         super.onCreate();
         Log.d(TAG, "Service Created");
+
         notificationManager = (NotificationManager) getSystemService(NOTIFICATION_SERVICE);
         createNotificationChannel();
 
         voiceIdService = new VoiceIdService(this);
 
-        // تخصيص Buffer لتخزين الصوت (2 ثانية من الصوت)
-        int bufferSizeInFrames = SAMPLE_RATE * 2 / FRAME_LENGTH; // 2 ثانية
+        int bufferSizeInFrames = SAMPLE_RATE * 2 / FRAME_LENGTH;
         audioBuffer = new short[bufferSizeInFrames * FRAME_LENGTH];
 
+        initPorcupine();
+    }
+
+    private void initPorcupine() {
         try {
             porcupineManager = new PorcupineManager.Builder()
                     .setAccessKey(apiKey)
-                    .setKeywordPath("nabd.ppn")
+                    .setKeywordPath(getFilesDir() + "/nabd.ppn")
+                    .setModelPath(getFilesDir() + "/porcupine_params.pv")
                     .setSensitivity(0.7f)
                     .build(this, new PorcupineManagerCallback() {
                         @Override
@@ -69,21 +76,28 @@ public class PorcupainService extends Service {
                     });
             Log.d(TAG, "PorcupineManager initialized successfully");
         } catch (PorcupineException e) {
-            Log.e(TAG, "Failed to initialize PorcupineManager: " + e.getMessage());
+            Log.e(TAG, "Failed to initialize PorcupineManager", e);
+            porcupineManager = null;
             stopSelf();
         }
     }
 
     @Override
     public int onStartCommand(Intent intent, int flags, int startId) {
+        if (porcupineManager == null) {
+            Log.e(TAG, "PorcupineManager is null — stopping service");
+            stopSelf();
+            return START_NOT_STICKY;
+        }
+
         if (!isRunning) {
             isRunning = true;
             Notification notification = createNotification();
             startForeground(NOTIFICATION_ID, notification);
             Log.d(TAG, "Foreground service started with notification");
 
-            // التحقق من إذن الميكروفون قبل البدء
-            if (ActivityCompat.checkSelfPermission(this, Manifest.permission.RECORD_AUDIO) != PackageManager.PERMISSION_GRANTED) {
+            if (ActivityCompat.checkSelfPermission(this, Manifest.permission.RECORD_AUDIO)
+                    != PackageManager.PERMISSION_GRANTED) {
                 Log.e(TAG, "Microphone permission not granted, stopping service");
                 stopSelf();
                 return START_NOT_STICKY;
@@ -96,14 +110,21 @@ public class PorcupainService extends Service {
     }
 
     private void startRecording() {
-        // التحقق من إذن الميكروفون مرة أخرى (احتياطيًا)
-        if (ActivityCompat.checkSelfPermission(this, Manifest.permission.RECORD_AUDIO) != PackageManager.PERMISSION_GRANTED) {
+        if (ActivityCompat.checkSelfPermission(this, Manifest.permission.RECORD_AUDIO)
+                != PackageManager.PERMISSION_GRANTED) {
             Log.e(TAG, "Microphone permission not granted, cannot start recording");
             stopSelf();
             return;
         }
 
-        audioRecord = new AudioRecord(MediaRecorder.AudioSource.MIC, SAMPLE_RATE, CHANNELS, ENCODING, BUFFER_SIZE);
+        audioRecord = new AudioRecord(
+                MediaRecorder.AudioSource.MIC,
+                SAMPLE_RATE,
+                CHANNELS,
+                ENCODING,
+                BUFFER_SIZE
+        );
+
         if (audioRecord.getState() != AudioRecord.STATE_INITIALIZED) {
             Log.e(TAG, "Failed to initialize AudioRecord");
             stopSelf();
@@ -119,12 +140,14 @@ public class PorcupainService extends Service {
                 int numRead = audioRecord.read(frameBuffer, 0, frameBuffer.length);
                 if (numRead > 0) {
                     synchronized (audioBuffer) {
-                        System.arraycopy(frameBuffer, 0, audioBuffer, bufferIndex * FRAME_LENGTH, numRead);
+                        System.arraycopy(frameBuffer, 0, audioBuffer,
+                                bufferIndex * FRAME_LENGTH, numRead);
                         bufferIndex = (bufferIndex + 1) % (audioBuffer.length / FRAME_LENGTH);
                     }
                 }
             }
         }).start();
+
         Log.d(TAG, "Recording started successfully");
     }
 
@@ -133,33 +156,32 @@ public class PorcupainService extends Service {
             porcupineManager.start();
             Log.d(TAG, "PorcupineManager started listening");
         } catch (PorcupineException e) {
-            Log.e(TAG, "Failed to start PorcupineManager: " + e.getMessage());
+            Log.e(TAG, "Failed to start PorcupineManager", e);
             stopSelf();
         }
     }
 
     private void verifyAndOpenApp(short[] audioBuffer) {
-        io.flutter.plugin.common.MethodChannel.Result callback = new io.flutter.plugin.common.MethodChannel.Result() {
-            @Override
-            public void success(Object result) {
-                if ("Voice matched".equals(result)) {
-                    Log.d(TAG, "Voice verified, opening app...");
-                    openApp();
-                } else {
-                    Log.d(TAG, "Voice not matched, ignoring...");
-                }
-            }
-
-            @Override
-            public void error(String errorCode, String errorMessage, Object errorDetails) {
-                Log.e(TAG, "Voice verification error: " + errorMessage);
-            }
-
-            @Override
-            public void notImplemented() {
-                Log.w(TAG, "Method not implemented");
-            }
-        };
+        io.flutter.plugin.common.MethodChannel.Result callback =
+                new io.flutter.plugin.common.MethodChannel.Result() {
+                    @Override
+                    public void success(Object result) {
+                        if ("Voice matched".equals(result)) {
+                            Log.d(TAG, "Voice verified, opening app...");
+                            openApp();
+                        } else {
+                            Log.d(TAG, "Voice not matched, ignoring...");
+                        }
+                    }
+                    @Override
+                    public void error(String errorCode, String errorMessage, Object errorDetails) {
+                        Log.e(TAG, "Voice verification error: " + errorMessage);
+                    }
+                    @Override
+                    public void notImplemented() {
+                        Log.w(TAG, "Method not implemented");
+                    }
+                };
 
         voiceIdService.verifyVoice(this, audioBuffer, callback);
     }
@@ -168,14 +190,18 @@ public class PorcupainService extends Service {
         Log.d(TAG, "Trying to open app using AccessibilityService...");
 
         if (AutoOpenAccessibilityService.getInstance() != null) {
-            AutoOpenAccessibilityService.launchApp(AutoOpenAccessibilityService.getInstance());
+            AutoOpenAccessibilityService.launchApp(
+                    AutoOpenAccessibilityService.getInstance()
+            );
             Log.d(TAG, "App launched using AccessibilityService");
             return;
         }
 
         Intent launchIntent = getPackageManager().getLaunchIntentForPackage(getPackageName());
         if (launchIntent != null) {
-            launchIntent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK | Intent.FLAG_ACTIVITY_CLEAR_TOP);
+            launchIntent.addFlags(
+                    Intent.FLAG_ACTIVITY_NEW_TASK | Intent.FLAG_ACTIVITY_CLEAR_TOP
+            );
             startActivity(launchIntent);
             Log.d(TAG, "App launched via getLaunchIntentForPackage");
         } else {
@@ -184,13 +210,13 @@ public class PorcupainService extends Service {
     }
 
     private Notification createNotification() {
-        NotificationCompat.Builder builder = new NotificationCompat.Builder(this, CHANNEL_ID)
+        return new NotificationCompat.Builder(this, CHANNEL_ID)
                 .setSmallIcon(android.R.drawable.ic_btn_speak_now)
                 .setContentTitle("Voice Detection Active")
                 .setContentText("Listening for the wake word...")
                 .setPriority(NotificationCompat.PRIORITY_LOW)
-                .setOngoing(true);
-        return builder.build();
+                .setOngoing(true)
+                .build();
     }
 
     private void createNotificationChannel() {
@@ -209,20 +235,23 @@ public class PorcupainService extends Service {
     public void onDestroy() {
         isRunning = false;
         isRecording = false;
+
         if (audioRecord != null) {
             audioRecord.stop();
             audioRecord.release();
             audioRecord = null;
         }
+
         if (porcupineManager != null) {
             try {
                 porcupineManager.stop();
                 porcupineManager.delete();
                 Log.d(TAG, "PorcupineManager stopped and deleted");
             } catch (PorcupineException e) {
-                Log.e(TAG, "Error stopping PorcupineManager: " + e.getMessage());
+                Log.e(TAG, "Error stopping PorcupineManager", e);
             }
         }
+
         super.onDestroy();
         Log.d(TAG, "Service Destroyed");
     }
