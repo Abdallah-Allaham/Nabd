@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:nabd/utils/const_value.dart';
 import 'package:nabd/services/tts_service.dart';
 import 'package:nabd/services/stt_service.dart';
+import 'package:nabd/utils/audio_helper.dart';
 
 class ProfileScreen extends StatefulWidget {
   const ProfileScreen({super.key});
@@ -23,8 +24,8 @@ class _ProfileScreenState extends State<ProfileScreen> {
   Future<void> _initializeServices() async {
     await _ttsService.initialize();
     await _sttService.stopListening();
-    await _ttsService.stop();
-    await _ttsService.speak("أنتقلت إلى الملف الشخصي");
+    await _ttsService.stop();final player = await AudioHelper.playAssetSound('assets/sounds/IMovedToTheProfile.mp3');
+        await player.onPlayerComplete.first; 
     await Future.delayed(const Duration(milliseconds: 500)); // تأخير قصير
   }
 

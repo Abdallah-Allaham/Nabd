@@ -4,6 +4,7 @@ import 'package:nabd/services/stt_service.dart';
 import 'package:nabd/services/tts_service.dart';
 import 'package:nabd/utils/const_value.dart';
 import 'package:nabd/widgets/avatar.dart';
+import 'package:nabd/utils/audio_helper.dart';
 import 'package:flutter/services.dart';
 
 class SignupScreen extends StatelessWidget {
@@ -76,22 +77,26 @@ class _RegistrationStepsState extends State<RegistrationSteps> {
 
     switch (stepIndex) {
       case 0:
-        await _ttsService.speak('يرجى إدخال رقم هاتفك');
+final player = await AudioHelper.playAssetSound('assets/sounds/PleaseEnterYourPhoneNumber.mp3');
+        await player.onPlayerComplete.first;
         await Future.delayed(const Duration(milliseconds: 150));
         await _listenForPhoneNumber();
         break;
       case 1:
-        await _ttsService.speak('يرجى إدخال اسمك');
+final player = await AudioHelper.playAssetSound('assets/sounds/EnterPleaseYourName.mp3');
+        await player.onPlayerComplete.first;
         await Future.delayed(const Duration(milliseconds: 150));
         await _listenForName();
         break;
       case 2:
-        await _ttsService.speak('يرجى إدخال رقم هاتف المسؤول عنك');
+final player = await AudioHelper.playAssetSound('assets/sounds/EnterYourSupervisorsPhoneNumber.mp3');
+        await player.onPlayerComplete.first;
         await Future.delayed(const Duration(milliseconds: 150));
         await _listenForGuardianPhoneNumber();
         break;
       case 3:
-        await _ttsService.speak('يرجى تسجيل صوتك، تحدث لمدة 7 ثانية');
+final player = await AudioHelper.playAssetSound('assets/sounds/RecordYourVoiceID.mp3');
+        await player.onPlayerComplete.first;
         await Future.delayed(const Duration(milliseconds: 150));
         await _enrollVoice();
         break;
@@ -103,8 +108,9 @@ class _RegistrationStepsState extends State<RegistrationSteps> {
     if (_phoneNumber.isNotEmpty) {
       _startStep(1);
     } else {
-      await _ttsService.speak('لم أسمع رقم الهاتف، حاول مرة أخرى');
-      await _listenForPhoneNumber();
+final player = await AudioHelper.playAssetSound('assets/sounds/DidnotHereYourNum.mp3');
+        await player.onPlayerComplete.first;
+        await _listenForPhoneNumber();
     }
   }
 
@@ -113,8 +119,9 @@ class _RegistrationStepsState extends State<RegistrationSteps> {
     if (_name.isNotEmpty) {
       _startStep(2);
     } else {
-      await _ttsService.speak('لم أسمع الاسم، حاول مرة أخرى');
-      await _listenForName();
+final player = await AudioHelper.playAssetSound('assets/sounds/DidnotHearYourName.mp3');
+        await player.onPlayerComplete.first;
+        await _listenForName();
     }
   }
 
@@ -123,8 +130,9 @@ class _RegistrationStepsState extends State<RegistrationSteps> {
     if (_guardianPhoneNumber.isNotEmpty) {
       _startStep(3);
     } else {
-      await _ttsService.speak('لم أسمع رقم هاتف المسؤول، حاول مرة أخرى');
-      await _listenForGuardianPhoneNumber();
+final player = await AudioHelper.playAssetSound('assets/sounds/DidNotHearHheOfficialsPhoneNumber.mp3');
+        await player.onPlayerComplete.first;
+        await _listenForGuardianPhoneNumber();
     }
   }
 
@@ -139,33 +147,38 @@ class _RegistrationStepsState extends State<RegistrationSteps> {
         setState(() {
           _voiceIdStatus = 'تم تسجيل الصوت بنجاح';
         });
-        await _ttsService.speak('تم تسجيل الصوت بنجاح');
+final player = await AudioHelper.playAssetSound('assets/sounds/YourVoiceHasBeenSuccessfullyRecorded.mp3');
+        await player.onPlayerComplete.first;
         _completeRegistration();
       } else if (result == "Voice already enrolled") {
         setState(() {
           _voiceIdStatus = 'الصوت مسجل مسبقًا';
         });
-        await _ttsService.speak('الصوت مسجل مسبقًا');
+final player = await AudioHelper.playAssetSound('assets/sounds/YourVoiceIsPre-Recorded.mp3');
+        await player.onPlayerComplete.first;
         _completeRegistration();
       } else {
         setState(() {
           _voiceIdStatus = 'فشل التسجيل، حاول مرة أخرى';
         });
-        await _ttsService.speak('فشل التسجيل، حاول مرة أخرى');
+final player = await AudioHelper.playAssetSound('assets/sounds/RegistrationFailed.mp3');
+        await player.onPlayerComplete.first;
         await _enrollVoice(); // إعادة المحاولة
       }
     } catch (e) {
       setState(() {
         _voiceIdStatus = 'خطأ: $e';
       });
-      await _ttsService.speak('حدث خطأ، حاول مرة أخرى');
-      await _enrollVoice();
+final player = await AudioHelper.playAssetSound('assets/sounds/AnErrorOccurred.mp3');
+        await player.onPlayerComplete.first;
+        await _enrollVoice();
     }
   }
 
   Future<void> _completeRegistration() async {
-    await _ttsService.speak('تم التسجيل بنجاح');
-    setState(() {
+final player = await AudioHelper.playAssetSound('assets/sounds/RegistrationHasBeenCompletedSuccessfully.mp3');
+        await player.onPlayerComplete.first;
+        setState(() {
       _registrationCompleted = true;
     });
 

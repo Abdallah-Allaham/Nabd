@@ -4,6 +4,7 @@ import 'package:video_player/video_player.dart';
 import 'package:camera/camera.dart';
 import 'package:permission_handler/permission_handler.dart';
 import 'package:nabd/services/tts_service.dart';
+import 'package:nabd/utils/audio_helper.dart';
 import 'package:nabd/services/stt_service.dart';
 
 class HomeScreen extends StatefulWidget {
@@ -73,8 +74,9 @@ class _HomePageState extends State<HomeScreen> with TickerProviderStateMixin {
     await _ttsService.initialize();
     await _sttService.stopListening();
     await _ttsService.stop();
-    await _ttsService.speak("انتقلت إلى الصفحة الرئيسية");
-    await Future.delayed(const Duration(milliseconds: 500));
+final player = await AudioHelper.playAssetSound('assets/sounds/IWentToTheHomePage.mp3');
+        await player.onPlayerComplete.first;
+        await Future.delayed(const Duration(milliseconds: 500));
   }
 
   Future<void> _initializeVideo() async {
@@ -94,8 +96,9 @@ class _HomePageState extends State<HomeScreen> with TickerProviderStateMixin {
       print("❌ لا يوجد إذن للكاميرا!");
       await _sttService.stopListening();
       await _ttsService.stop();
-      await _ttsService.speak("لا يمكن فتح الكاميرا، لم يتم منح الإذن");
-      await Future.delayed(const Duration(milliseconds: 500));
+final player = await AudioHelper.playAssetSound('assets/sounds/TheCameraCannotBeOpenedDueToLackOfPermission.mp3');
+        await player.onPlayerComplete.first;
+        await Future.delayed(const Duration(milliseconds: 500));
       return;
     }
 
@@ -105,7 +108,8 @@ class _HomePageState extends State<HomeScreen> with TickerProviderStateMixin {
         print("❌ لا توجد كاميرات متاحة!");
         await _sttService.stopListening();
         await _ttsService.stop();
-        await _ttsService.speak("لا توجد كاميرا متاحة");
+final player = await AudioHelper.playAssetSound('assets/sounds/CameraIsNotAvailable.mp3');
+        await player.onPlayerComplete.first;
         await Future.delayed(const Duration(milliseconds: 500));
         return;
       }
@@ -119,22 +123,25 @@ class _HomePageState extends State<HomeScreen> with TickerProviderStateMixin {
           });
           await _sttService.stopListening();
           await _ttsService.stop();
-          await _ttsService.speak("تم فتح الكاميرا");
-          await Future.delayed(const Duration(milliseconds: 500));
+final player = await AudioHelper.playAssetSound('assets/sounds/TheCameraIsOpened.mp3');
+        await player.onPlayerComplete.first;
+        await Future.delayed(const Duration(milliseconds: 500));
         }
       } else {
         print("❌ فشل تهيئة الكاميرا!");
         await _sttService.stopListening();
         await _ttsService.stop();
-        await _ttsService.speak("فشل فتح الكاميرا، حاول مرة أخرى");
+final player = await AudioHelper.playAssetSound('assets/sounds/CameraFailedToOpen.mp3');
+        await player.onPlayerComplete.first;    
         await Future.delayed(const Duration(milliseconds: 500));
       }
     } catch (e) {
       print("🚨 خطأ أثناء فتح الكاميرا: $e");
       await _sttService.stopListening();
       await _ttsService.stop();
-      await _ttsService.speak("حدث خطأ أثناء فتح الكاميرا، حاول مرة أخرى");
-      await Future.delayed(const Duration(milliseconds: 500));
+final player = await AudioHelper.playAssetSound('assets/sounds/AnErrorOccurredWhileOpeningTheCamera.mp3');
+        await player.onPlayerComplete.first;   
+        await Future.delayed(const Duration(milliseconds: 500));
     }
   }
 
