@@ -8,6 +8,7 @@ import 'package:camera/camera.dart';
 import 'package:permission_handler/permission_handler.dart';
 import 'package:nabd/utils/const_value.dart';
 import 'package:nabd/services/tts_service.dart';
+import 'package:nabd/utils/audio_helper.dart';
 import 'package:nabd/services/stt_service.dart';
 import 'package:web_socket_channel/io.dart';
 import 'package:web_socket_channel/web_socket_channel.dart';
@@ -110,6 +111,11 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
     await _sttService.stopListening();
     await _ttsService.stop();
 
+final player = await AudioHelper.playAssetSound('assets/sounds/IWentToTheHomePage.mp3');
+        await player.onPlayerComplete.first;
+        await Future.delayed(const Duration(milliseconds: 500));
+  }
+
     // 2) أنيميشن الأفتار ثم نطق تأكيد فتح الكاميرا
     await _avatarAnimController.forward();
     await _ttsService.speak("تم فتح الكاميرا");
@@ -167,6 +173,7 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
     });
   }
 
+
   void _onMessage(dynamic raw) {
     final data = json.decode(raw as String);
     if (data['status'] == 'interval') {
@@ -218,6 +225,63 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
       } catch (_) {
         // تجاهل الخطأ إن حصل
       }
+
+  Future<void> _runAvatarAndOpenCamera() async {
+    print("📷 محاولة فتح الكاميرا...");
+    if (mounted) await _avatarAnimController.forward();
+
+    final granted = await _checkCameraPermission();
+    if (!granted) {
+      print("❌ لا يوجد إذن للكاميرا!");
+      await _sttService.stopListening();
+      await _ttsService.stop();
+final player = await AudioHelper.playAssetSound('assets/sounds/TheCameraCannotBeOpenedDueToLackOfPermission.mp3');
+        await player.onPlayerComplete.first;
+        await Future.delayed(const Duration(milliseconds: 500));
+      return;
+    }
+
+    try {
+      _cameras = await availableCameras();
+      if (_cameras.isEmpty) {
+        print("❌ لا توجد كاميرات متاحة!");
+        await _sttService.stopListening();
+        await _ttsService.stop();
+final player = await AudioHelper.playAssetSound('assets/sounds/CameraIsNotAvailable.mp3');
+        await player.onPlayerComplete.first;
+        await Future.delayed(const Duration(milliseconds: 500));
+        return;
+      }
+      _cameraController = CameraController(_cameras.first, ResolutionPreset.medium);
+      await _cameraController!.initialize();
+      if (_cameraController!.value.isInitialized) {
+        await _cameraController!.setZoomLevel(_zoomLevel);
+        if (mounted) {
+          setState(() {
+            _showCamera = true;
+          });
+          await _sttService.stopListening();
+          await _ttsService.stop();
+final player = await AudioHelper.playAssetSound('assets/sounds/TheCameraIsOpened.mp3');
+        await player.onPlayerComplete.first;
+        await Future.delayed(const Duration(milliseconds: 500));
+        }
+      } else {
+        print("❌ فشل تهيئة الكاميرا!");
+        await _sttService.stopListening();
+        await _ttsService.stop();
+final player = await AudioHelper.playAssetSound('assets/sounds/CameraFailedToOpen.mp3');
+        await player.onPlayerComplete.first;    
+        await Future.delayed(const Duration(milliseconds: 500));
+      }
+    } catch (e) {
+      print("🚨 خطأ أثناء فتح الكاميرا: $e");
+      await _sttService.stopListening();
+      await _ttsService.stop();
+final player = await AudioHelper.playAssetSound('assets/sounds/AnErrorOccurredWhileOpeningTheCamera.mp3');
+        await player.onPlayerComplete.first;   
+        await Future.delayed(const Duration(milliseconds: 500));
+ 
     }
 
     // أوقف بث الكاميرا والـ WebSocket

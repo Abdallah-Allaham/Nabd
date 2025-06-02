@@ -5,6 +5,7 @@ import 'package:nabd/screens/setting_screen.dart';
 import 'package:nabd/screens/home_screen.dart';
 import 'package:nabd/services/tts_service.dart';
 import 'package:nabd/services/stt_service.dart';
+import 'package:nabd/utils/audio_helper.dart';
 import 'package:nabd/services/assistant_service.dart';
 
 class MainScreen extends StatefulWidget {
@@ -73,7 +74,12 @@ class _MainScreenState extends State<MainScreen>
   Future<void> _initializeServices() async {
     await _ttsService.initialize();
     await _sttService.initSpeech();
+ 
     await _speakWithControl("جاهز للمساعدة");
+
+   // await _speakWithControl("جاهز للمساعدة");
+    await _startListening();
+ 
   }
 
   Future<void> _speakWithControl(String text) async {
@@ -91,6 +97,7 @@ class _MainScreenState extends State<MainScreen>
   }
 
   Future<void> _startListening() async {
+
     if (_isListening || _isSpeaking) return;
     _isListening = true;
     try {
@@ -99,6 +106,21 @@ class _MainScreenState extends State<MainScreen>
     } catch (_) {
       _isListening = false;
       await _speakWithControl("حدث خطأ في الاستماع، سأحاول مرة أخرى");
+
+    if (!_isListening && !_isSpeaking && mounted) {
+      print("🎙️ بدء الاستماع...");
+      try {
+        setState(() => _isListening = true);
+        await _sttService.startListening();
+        _checkForCommand();
+      } catch (e) {
+        print("🚨 خطأ أثناء بدء الاستماع: $e");
+        setState(() => _isListening = false);
+     //   await _speakWithControl("حدث خطأ في الاستماع، سأحاول مرة أخرى");
+      }
+    } else if (_isSpeaking) {
+      print("🎙️ الـ TTS شغال، بيتم الانتظار...");
+ 
     }
   }
 
@@ -170,8 +192,27 @@ class _MainScreenState extends State<MainScreen>
             } else if (cleaned.contains("اعد الكلام")) {
               return _speakWithControl("أَعِدْ الكلام");
             } else {
+
               return _speakWithControl("لم أفهم، أعد المحاولة");
             }
+
+final player = await AudioHelper.playAssetSound('assets/sounds/YouAreNotOnTheHomePage.mp3');
+        await player.onPlayerComplete.first;             }
+            await Future.delayed(Duration(seconds: 3));
+            await _startListening();
+          } else if (cleaned.contains("اعد الكلام")) {
+final player = await AudioHelper.playAssetSound('assets/sounds/SpeakAgain.mp3');
+        await player.onPlayerComplete.first;
+        await Future.delayed(Duration(seconds: 2));
+            await _startListening();
+          } else {}
+        } catch (e) {
+          print("\u{1F6A8} خطأ أثناء التواصل مع المساعد: $e");
+final player = await AudioHelper.playAssetSound('assets/sounds/SomethingWentWrong.mp3');
+        await player.onPlayerComplete.first;
+        await Future.delayed(Duration(seconds: 3));
+          await _startListening();
+ 
         }
       } catch (e) {
         await _speakWithControl("حدث خطأ، حاول مرة أخرى");
