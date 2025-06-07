@@ -61,8 +61,6 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
     super.didChangeDependencies();
     final screenHeight = MediaQuery.of(context).size.height;
 
-    // الأفاتار سينتقل من منتصف الشاشة (screenHeight/2 - 90) إلى ما بعد أسفل الشاشة (+100)
-    // أثناء تصغيره
     _avatarPositionAnim = Tween<double>(
       begin: screenHeight / 2 - 90,
       end: screenHeight + 100, // يجعله يختفي أسفل الشاشة

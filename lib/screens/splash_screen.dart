@@ -2,7 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:animate_do/animate_do.dart';
 import 'package:nabd/utils/const_value.dart';
 import 'package:nabd/widgets/avatar.dart';
-import 'package:nabd/utils/audio_helper.dart';  // تأكد من تعديل المسار إذا اختلف
+import 'package:nabd/utils/audio_helper.dart';  
 import 'login_screen.dart';
 
 class SplashScreen extends StatefulWidget {
@@ -48,7 +48,7 @@ class _SplashScreenState extends State<SplashScreen> {
   @override
   void dispose() {
     // نظّف مشغّل الصوت
-    
+
     super.dispose();
   }
 
