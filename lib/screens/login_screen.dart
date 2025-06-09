@@ -6,6 +6,7 @@ import 'package:nabd/screens/signup_screen.dart';
 import 'package:nabd/screens/main_screen.dart';
 import 'package:nabd/services/tts_service.dart';
 import 'package:nabd/services/stt_service.dart';
+import 'package:nabd/utils/const_value.dart';
 import 'package:nabd/utils/shared_preferences_helper.dart';
 import 'package:nabd/utils/audio_helper.dart';
 
@@ -176,7 +177,12 @@ class _LoginScreenState extends State<LoginScreen> {
       _confirmingPhone = true;
     });
 
-    await _ttsService.speak("قلت: $_rawPhoneInput. هل هذا رقمك الصحيح؟");
+final p1 = await AudioHelper.playAssetSound('assets/sounds/YouSaid.mp3');
+await p1.onPlayerComplete.first;
+
+await _ttsService.speak(_rawPhoneInput);
+final p2 = await AudioHelper.playAssetSound('assets/sounds/IsThisYourCorrectNumber.mp3');
+await p2.onPlayerComplete.first;
     await Future.delayed(const Duration(milliseconds: 200));
     _listenForPhoneConfirmation();
   }
@@ -185,9 +191,9 @@ class _LoginScreenState extends State<LoginScreen> {
     String answer = await _waitForSpeechResult();
     answer = answer.trim().toLowerCase();
 
-    if (answer.contains('نعم')) {
+    if (answer.contains('نعم')|| answer.contains('عندي')|| answer.contains('يوجد')|| answer.contains('yes')) {
       _checkPhoneInFirestore();
-    } else if (answer.contains('لا')) {
+  } else if (answer.contains('لا')|| answer.contains('ما عندي')|| answer.contains('لا يوجد')|| answer.contains('no')) {
       final p = await AudioHelper.playAssetSound('assets/sounds/Please re-enter your phone number again.mp3');
       await p.onPlayerComplete.first;
       _askForPhoneNumber();
@@ -235,12 +241,14 @@ class _LoginScreenState extends State<LoginScreen> {
         _navigateToMain();
       },
       verificationFailed: (FirebaseAuthException e) async {
-        await _ttsService.speak("فشل إرسال رمز التحقق. حاول مرة أخرى.");
-        _askForPhoneNumber();
+final player = await AudioHelper.playAssetSound('assets/sounds/Failed to send code Please try again later.mp3');
+      await player.onPlayerComplete.first;
+      _askForPhoneNumber();
       },
       codeSent: (String verificationId, int? resendToken) async {
-        await _ttsService.speak("تم إرسال رمز التحقق. الرجاء قوله الآن.");
-        String code = await _waitForSpeechResult();
+final player = await AudioHelper.playAssetSound('assets/sounds/Verification code has been sent Please enter it now.mp3');
+      await player.onPlayerComplete.first;
+      String code = await _waitForSpeechResult();
         code = code.replaceAll(' ', '').trim();
 
         try {
@@ -252,12 +260,14 @@ class _LoginScreenState extends State<LoginScreen> {
           await SharedPreferencesHelper.instance.setHasLoggedIn(true);
           _navigateToMain();
         } catch (e) {
-          await _ttsService.speak("الرمز غير صحيح. سيتم إعادة المحاولة.");
-          _sendOTPAndVerify();
+final player = await AudioHelper.playAssetSound('assets/sounds/The code is incorrect Please try again.mp3');
+      await player.onPlayerComplete.first;
+       _sendOTPAndVerify();
         }
       },
-      codeAutoRetrievalTimeout: (String verificationId) {
-        _ttsService.speak("انتهى الوقت المخصص للرمز. أعد المحاولة.");
+      codeAutoRetrievalTimeout: (String verificationId) async {
+final player = await AudioHelper.playAssetSound('assets/sounds/The code has timed out Please try again later.mp3');
+      await player.onPlayerComplete.first;
       },
     );
   }
@@ -275,11 +285,11 @@ class _LoginScreenState extends State<LoginScreen> {
     String answer = await _waitForSpeechResult();
     answer = answer.trim().toLowerCase();
 
-    if (answer.contains('نعم')) {
+    if (answer.contains('نعم')|| answer.contains('عندي')|| answer.contains('يوجد')|| answer.contains('yes')) {
       final p = await AudioHelper.playAssetSound('assets/sounds/Now I will open the account creation page.mp3');
       await p.onPlayerComplete.first;
       _navigateToSignup();
-    } else if (answer.contains('لا')) {
+    } else if (answer.contains('لا')|| answer.contains('ما عندي')|| answer.contains('لا يوجد')|| answer.contains('no')) {
       final p = await AudioHelper.playAssetSound('assets/sounds/Let is re-enter the number.mp3');
       await p.onPlayerComplete.first;
       _askForPhoneNumber();
@@ -328,13 +338,89 @@ class _LoginScreenState extends State<LoginScreen> {
     super.dispose();
   }
 
-  @override
-  Widget build(BuildContext context) {
-    return const Scaffold(
-      backgroundColor: Colors.black,
-      body: Center(
-        child: CircularProgressIndicator(color: Colors.white),
+@override
+Widget build(BuildContext context) {
+  return Scaffold(
+    body: Container(
+      width: double.infinity,
+      height: double.infinity,
+      decoration: const BoxDecoration(
+        gradient: LinearGradient(
+          begin: Alignment.topCenter,
+          end: Alignment.bottomCenter,
+          colors: [
+            Color(0xFF0A286D), // ConstValue.color1
+            Color(0xFF151922), // ConstValue.color2
+          ],
+        ),
       ),
-    );
+      child: SafeArea(
+        child: Center(
+          child: Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 24.0),
+            child: Column(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                // شعار رمزي
+                Container(
+                  height: 120,
+                  width: 120,
+                  decoration: BoxDecoration(
+                    color: Colors.white24,
+                    shape: BoxShape.circle,
+                  ),
+                  child: Center(
+                    child: Icon(
+                      Icons.hearing, // أيقونة قابلة للتبديل
+                      size: 60,
+                      color: Colors.white,
+                    ),
+                  ),
+                ),
+                const SizedBox(height: 30),
+
+                Text(
+                  'تطبيق نبض',
+                  style: TextStyle(
+                    color: Colors.white,
+                    fontSize: 28,
+                    fontWeight: FontWeight.bold,
+                    letterSpacing: 1.2,
+                  ),
+                ),
+                const SizedBox(height: 12),
+
+                // جملة ترحيبية
+                Text(
+                  'مساعدك الصوتي الذكي للمكفوفين',
+                  style: TextStyle(
+                    color: Colors.grey[300],
+                    fontSize: 16,
+                  ),
+                  textAlign: TextAlign.center,
+                ),
+                const SizedBox(height: 40),
+
+                // أنيميشن تحميل
+                CircularProgressIndicator(
+                  color: Colors.white,
+                  strokeWidth: 3,
+                ),
+                const SizedBox(height: 40),
+
+                Text(
+                  'جارٍ التحقق من الحساب...',
+                  style: TextStyle(
+                    color: Colors.grey[400],
+                    fontSize: 14,
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ),
+      ),
+    ),
+  );
   }
 }

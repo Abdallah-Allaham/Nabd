@@ -3,6 +3,7 @@ import 'package:flutter/services.dart';
 import 'package:flutter_dotenv/flutter_dotenv.dart';
 import 'package:firebase_core/firebase_core.dart';
 import 'package:firebase_app_check/firebase_app_check.dart';
+import 'package:nabd/screens/splash_screen.dart';
 import 'package:nabd/utils/shared_preferences_helper.dart';
 import 'package:nabd/screens/login_screen.dart';
 import 'package:android_intent_plus/android_intent.dart';
@@ -149,14 +150,14 @@ class _MyAppState extends State<MyApp> with WidgetsBindingObserver {
   }
 
   // ————————————————
-  // الواجهة الرئيسية: تبدأ دائمًا بـ LoginScreen (التي تتولّى بدورها التحقق إن كان المستخدم مسجّل دخول سابقًا)
   @override
   Widget build(BuildContext context) {
     return MaterialApp(
       title: 'Nabd',
       debugShowCheckedModeBanner: false,
       theme: ThemeData.dark(),
-      home: const LoginScreen(),
+      home: const SplashScreen(),
+
     );
   }
 }
