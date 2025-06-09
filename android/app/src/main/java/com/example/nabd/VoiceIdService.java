@@ -111,7 +111,7 @@ public class VoiceIdService {
                     }
                     Log.d(TAG, "Multiplied audio buffer to " + multipliedSamples + " samples (" + (multipliedSamples / SAMPLE_RATE) + " seconds)");
 
-                    // حفظ الصوت كملف WAV (اختياري، يمكن نزيله لو مش محتاجين)
+
                     Log.d(TAG, "Saving audio to WAV file...");
                     try {
                         saveAudioToWav(context, multipliedEnrollBuffer);
@@ -122,7 +122,7 @@ public class VoiceIdService {
                         return;
                     }
 
-                    // عملية الـ Enrollment بتكرار حتى الوصول إلى 85%
+                   
                     Log.d(TAG, "Starting voice enrollment...");
                     try {
                         if (eagleProfiler == null) {

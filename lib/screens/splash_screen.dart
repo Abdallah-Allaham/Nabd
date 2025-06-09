@@ -2,7 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:animate_do/animate_do.dart';
 import 'package:nabd/utils/const_value.dart';
 import 'package:nabd/widgets/avatar.dart';
-import 'package:nabd/utils/audio_helper.dart';  // تأكد من تعديل المسار إذا اختلف
+import 'package:nabd/utils/audio_helper.dart';
 import 'login_screen.dart';
 
 class SplashScreen extends StatefulWidget {
@@ -20,15 +20,12 @@ class _SplashScreenState extends State<SplashScreen> {
   void initState() {
     super.initState();
 
-    // شغّل الصوت من الأصول (غيّر المسار حسب الملف)
     AudioHelper.playAssetSound('assets/sounds/Welcome.mp3');
 
-    // شغّل الأنيميشن بعد الإطار الأول
     WidgetsBinding.instance.addPostFrameCallback((_) {
       setState(() => _showAnimation = true);
     });
 
-    // بعد 3 ثواني، ابدأ أنيميشن الخروج ثم الانتقال
     Future.delayed(const Duration(seconds: 3), () {
       setState(() => _isExiting = true);
       Future.delayed(const Duration(milliseconds: 1000), () {
@@ -47,8 +44,7 @@ class _SplashScreenState extends State<SplashScreen> {
 
   @override
   void dispose() {
-    // نظّف مشغّل الصوت
-    
+
     super.dispose();
   }
 
@@ -69,7 +65,6 @@ class _SplashScreenState extends State<SplashScreen> {
             children: [
               const SizedBox(height: 100),
 
-              // الأفاتار مع أنيميشن الخروج
               FadeOut(
                 animate: _isExiting,
                 duration: const Duration(milliseconds: 1000),
@@ -78,7 +73,6 @@ class _SplashScreenState extends State<SplashScreen> {
 
               const SizedBox(height: 100),
 
-              // نص "NABD" مع أنيميشن الدخول والخروج
               if (_showAnimation)
                 SlideInUp(
                   duration: const Duration(seconds: 2),

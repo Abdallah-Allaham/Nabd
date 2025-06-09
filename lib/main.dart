@@ -1,15 +1,38 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_dotenv/flutter_dotenv.dart';
+import 'package:firebase_core/firebase_core.dart';
+import 'package:firebase_app_check/firebase_app_check.dart';
 import 'package:nabd/screens/splash_screen.dart';
 import 'package:nabd/utils/shared_preferences_helper.dart';
+import 'package:nabd/screens/login_screen.dart';
 import 'package:android_intent_plus/android_intent.dart';
 import 'package:permission_handler/permission_handler.dart';
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
-  await SharedPreferencesHelper().init();
+
+  // ————————————————
+  // 1) تحميل متغيرات البيئة (dotenv)، إذا كنت تستخدم ملف .env
   await dotenv.load(fileName: ".env");
+
+  // ————————————————
+  // 2) تهيئة SharedPreferencesHelper (مرّة واحدة)
+  await SharedPreferencesHelper.instance.init();
+
+  // ————————————————
+  // 3) تهيئة Firebase (الحقيقة)
+  await Firebase.initializeApp();
+
+  // (اختياري) 4) تفعيل Firebase App Check للأندرويد
+  // إذا لم ترد استخدام App Check، يمكنك حذف السطرين التاليي
+  await FirebaseAppCheck.instance.activate(
+    androidProvider: AndroidProvider.debug,
+    // لاحظ: في الإصدارات الإنتاجية استبدل Debug بـ PlayIntegrity أو SafetyNet
+  );
+
+  // ————————————————
+  // 5) تشغيل التطبيق
   runApp(const MyApp());
 }
 
@@ -27,57 +50,67 @@ class _MyAppState extends State<MyApp> with WidgetsBindingObserver {
   void initState() {
     super.initState();
     WidgetsBinding.instance.addObserver(this);
-    requestBatteryIgnorePermission();
-    requestOverlayPermission();
-    checkAccessibilityPermission();
-    requestMicrophonePermission(); // ← إضافة طلب إذن الميكروفون
+
+    // عند بدء التطبيق، نفعل الصلاحيات والخدمات الأساسية
+    _requestBatteryIgnorePermission();
+    _requestOverlayPermission();
+    _checkAccessibilityPermission();
+    _requestMicrophonePermission();
   }
 
   @override
   void didChangeAppLifecycleState(AppLifecycleState state) {
     if (state == AppLifecycleState.resumed) {
-      stopService();
+      _stopService();
     } else if (state == AppLifecycleState.paused || state == AppLifecycleState.detached) {
-      startService();
+      _startService();
     }
   }
 
-  Future<void> startService() async {
+  // ————————————————
+  // خدمات Foreground Service (Native Android)
+  Future<void> _startService() async {
     try {
       await platform.invokeMethod('startService');
     } catch (e) {
-      print("Error starting service: $e");
+      debugPrint("Error starting service: $e");
     }
   }
 
-  Future<void> stopService() async {
+  Future<void> _stopService() async {
     try {
       await platform.invokeMethod('stopService');
     } catch (e) {
-      print("Error stopping service: $e");
+      debugPrint("Error stopping service: $e");
     }
   }
 
-  Future<void> requestBatteryIgnorePermission() async {
+  // ————————————————
+  // طلب تجاوز تحسينات البطاريّة (Battery Optimization)
+  Future<void> _requestBatteryIgnorePermission() async {
     try {
       await platform.invokeMethod('requestIgnoreBatteryOptimizations');
     } catch (e) {
-      print("Error requesting battery ignore permission: $e");
+      debugPrint("Error requesting battery ignore permission: $e");
     }
   }
 
-  Future<void> requestOverlayPermission() async {
+  // ————————————————
+  // طلب صلاحية Overlay (للرُسوم العائمة إن استخدمتها)
+  Future<void> _requestOverlayPermission() async {
     try {
       final bool isEnabled = await platform.invokeMethod('isOverlayEnabled');
       if (!isEnabled) {
         await platform.invokeMethod('requestOverlayPermission');
       }
     } catch (e) {
-      print("Error requesting overlay permission: $e");
+      debugPrint("Error requesting overlay permission: $e");
     }
   }
 
-  Future<void> checkAccessibilityPermission() async {
+  // ————————————————
+  // التحقق من صلاحية الوصول إلى Accessibility (إن استخدمت خدمة إمكانية الوصول)
+  Future<void> _checkAccessibilityPermission() async {
     try {
       final bool isEnabled = await platform.invokeMethod('isAccessibilityEnabled');
       if (!isEnabled) {
@@ -87,11 +120,13 @@ class _MyAppState extends State<MyApp> with WidgetsBindingObserver {
         await intent.launch();
       }
     } catch (e) {
-      print("Error checking accessibility permission: $e");
+      debugPrint("Error checking accessibility permission: $e");
     }
   }
 
-  Future<void> requestMicrophonePermission() async {
+  // ————————————————
+  // طلب صلاحية استخدام الميكروفون (STT)
+  Future<void> _requestMicrophonePermission() async {
     try {
       var status = await Permission.microphone.status;
       if (!status.isGranted) {
@@ -100,11 +135,11 @@ class _MyAppState extends State<MyApp> with WidgetsBindingObserver {
 
       status = await Permission.microphone.status;
       if (!status.isGranted) {
-        print("Microphone permission not granted, opening app settings...");
+        debugPrint("Microphone permission not granted, opening app settings...");
         await openAppSettings();
       }
     } catch (e) {
-      print("Error requesting microphone permission: $e");
+      debugPrint("Error requesting microphone permission: $e");
     }
   }
 
@@ -114,11 +149,15 @@ class _MyAppState extends State<MyApp> with WidgetsBindingObserver {
     super.dispose();
   }
 
+  // ————————————————
   @override
   Widget build(BuildContext context) {
     return MaterialApp(
+      title: 'Nabd',
       debugShowCheckedModeBanner: false,
-      home: SplashScreen(),
+      theme: ThemeData.dark(),
+      home: const SplashScreen(),
+
     );
   }
 }

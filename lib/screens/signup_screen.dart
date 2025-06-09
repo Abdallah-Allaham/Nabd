@@ -1,58 +1,40 @@
+import 'dart:async';
+import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:nabd/screens/login_screen.dart';
+import 'package:nabd/screens/main_screen.dart';
 import 'package:nabd/services/stt_service.dart';
 import 'package:nabd/services/tts_service.dart';
+import 'package:nabd/utils/audio_helper.dart';
 import 'package:nabd/utils/const_value.dart';
 import 'package:nabd/widgets/avatar.dart';
-import 'package:nabd/utils/audio_helper.dart';
-import 'package:flutter/services.dart';
 
-class SignupScreen extends StatelessWidget {
-  const SignupScreen({super.key});
+class SignupScreen extends StatefulWidget {
+  const SignupScreen({Key? key}) : super(key: key);
 
   @override
-  Widget build(BuildContext context) {
-    return Scaffold(
-      body: Container(
-        decoration: BoxDecoration(
-          gradient: LinearGradient(
-            begin: Alignment.topLeft,
-            end: Alignment.bottomRight,
-            colors: [ConstValue.color1, ConstValue.color2],
-          ),
-        ),
-        child: Center(
-          child: Column(
-            mainAxisAlignment: MainAxisAlignment.spaceEvenly,
-            children: [
-              RegistrationSteps(),
-              Avatar(size: 100),
-            ],
-          ),
-        ),
-      ),
-    );
-  }
+  State<SignupScreen> createState() => _SignupScreenState();
 }
 
-class RegistrationSteps extends StatefulWidget {
-  const RegistrationSteps({super.key});
-
-  @override
-  State<RegistrationSteps> createState() => _RegistrationStepsState();
-}
-
-class _RegistrationStepsState extends State<RegistrationSteps> {
-  int _currentStep = 0;
+class _SignupScreenState extends State<SignupScreen> {
   final TTSService _ttsService = TTSService();
   final STTService _sttService = STTService();
-  static const voiceIdChannel = MethodChannel('nabd/voiceid');
+  static const MethodChannel _voiceIdChannel = MethodChannel('nabd/voiceid');
+
+  final FirebaseAuth _auth = FirebaseAuth.instance;
+  final FirebaseFirestore _firestore = FirebaseFirestore.instance;
+
+  int _stepIndex = 0;
+  bool _registrationComplete = false;
 
   String _phoneNumber = '';
   String _name = '';
   String _guardianPhoneNumber = '';
-  String _voiceIdStatus = ''; // لتخزين حالة تسجيل الصوت
-  bool _registrationCompleted = false;
+  String _voiceIdStatus = '';
+  String? _verificationId;
+  int _resendAttempts = 0;
 
   @override
   void initState() {
@@ -63,230 +45,386 @@ class _RegistrationStepsState extends State<RegistrationSteps> {
   Future<void> _initializeServices() async {
     await _ttsService.initialize();
     await _sttService.initSpeech();
-    _startStep(0);
+    _askHasAccount();
   }
 
-  Future<void> _startStep(int stepIndex) async {
-    setState(() {
-      _currentStep = stepIndex;
+  String _convertArabicNumbers(String input) {
+    const map = {
+      '٠': '0',
+      '١': '1',
+      '٢': '2',
+      '٣': '3',
+      '٤': '4',
+      '٥': '5',
+      '٦': '6',
+      '٧': '7',
+      '٨': '8',
+      '٩': '9',
+    };
+    map.forEach((arab, lat) {
+      input = input.replaceAll(arab, lat);
     });
+    return input;
+  }
 
-    if (_registrationCompleted) return;
+  Future<void> _askHasAccount() async {
+    setState(() => _stepIndex = 0);
+final player = await AudioHelper.playAssetSound('assets/sounds/Welcome to the registration page.mp3');
+      await player.onPlayerComplete.first;
 
-    _sttService.clearLastWords();
+final p2 = await AudioHelper.playAssetSound('assets/sounds/Do you have a registered account in the Nabd app.mp3');
+    await p2.onPlayerComplete.first;
+    String ans = (await _waitForSpeechResult()).toLowerCase();
+    if (ans.contains('نعم') || ans.contains('عندي')|| ans.contains('يوجد')|| ans.contains('yes')) {
+final player = await AudioHelper.playAssetSound('assets/sounds/Okay I willl take you to the login screen.mp3');
+      await player.onPlayerComplete.first;
+      if (!mounted) return;
+      Navigator.pushReplacement(
+          context, MaterialPageRoute(builder: (_) => const LoginScreen()));
+    } else {
+final player = await AudioHelper.playAssetSound('assets/sounds/Okay we willl start by entering your personal information.mp3');
+      await player.onPlayerComplete.first;
+       _askForPhone();
+    }
+  }
 
-    switch (stepIndex) {
-      case 0:
+  Future<void> _askForPhone() async {
+    setState(() => _stepIndex = 0);
 final player = await AudioHelper.playAssetSound('assets/sounds/PleaseEnterYourPhoneNumber.mp3');
-        await player.onPlayerComplete.first;
-        await Future.delayed(const Duration(milliseconds: 150));
-        await _listenForPhoneNumber();
-        break;
-      case 1:
-final player = await AudioHelper.playAssetSound('assets/sounds/EnterPleaseYourName.mp3');
-        await player.onPlayerComplete.first;
-        await Future.delayed(const Duration(milliseconds: 150));
-        await _listenForName();
-        break;
-      case 2:
-final player = await AudioHelper.playAssetSound('assets/sounds/EnterYourSupervisorsPhoneNumber.mp3');
-        await player.onPlayerComplete.first;
-        await Future.delayed(const Duration(milliseconds: 150));
-        await _listenForGuardianPhoneNumber();
-        break;
-      case 3:
-final player = await AudioHelper.playAssetSound('assets/sounds/RecordYourVoiceID.mp3');
-        await player.onPlayerComplete.first;
-        await Future.delayed(const Duration(milliseconds: 150));
-        await _enrollVoice();
-        break;
+      await player.onPlayerComplete.first;
+    String spoken = (await _waitForSpeechResult()).replaceAll(' ', '').trim();
+    spoken = _convertArabicNumbers(spoken);
+
+    if (!_validatePhoneFormat(spoken)) {
+      final p = await AudioHelper.playAssetSound('assets/sounds/The number you entered is incorrect Make sure it starts with 079077or 078 and consists of 10 digits.mp3');
+      await p.onPlayerComplete.first;
+      return _askForPhone();
     }
+    _phoneNumber = spoken.replaceFirst(RegExp(r'^0'), '+962');
+    _confirmPhone();
   }
 
-  Future<void> _listenForPhoneNumber() async {
-    _phoneNumber = await _waitForSpeechResult();
-    if (_phoneNumber.isNotEmpty) {
-      _startStep(1);
+  bool _validatePhoneFormat(String phone) {
+    final regex = RegExp(r'^07[789]\d{7}$');
+    return regex.hasMatch(phone);
+  }
+
+  Future<void> _confirmPhone() async {
+    setState(() => _stepIndex = 0);
+final p1 = await AudioHelper.playAssetSound('assets/sounds/YouSaid.mp3');
+await p1.onPlayerComplete.first;
+await _ttsService.speak(_phoneNumber);
+final p2 = await AudioHelper.playAssetSound('assets/sounds/IsThisYourCorrectNumber.mp3');
+await p2.onPlayerComplete.first;
+    String ans = (await _waitForSpeechResult()).toLowerCase();
+    if (ans.contains('نعم')|| ans.contains('عندي')|| ans.contains('يوجد')|| ans.contains('yes')) {
+      _checkPhoneExists();
     } else {
-final player = await AudioHelper.playAssetSound('assets/sounds/DidnotHereYourNum.mp3');
-        await player.onPlayerComplete.first;
-        await _listenForPhoneNumber();
+final player = await AudioHelper.playAssetSound('assets/sounds/Okay please re-enter your phone number.mp3');
+      await player.onPlayerComplete.first;
+      _askForPhone();
     }
   }
 
-  Future<void> _listenForName() async {
-    _name = await _waitForSpeechResult();
-    if (_name.isNotEmpty) {
-      _startStep(2);
-    } else {
-final player = await AudioHelper.playAssetSound('assets/sounds/DidnotHearYourName.mp3');
-        await player.onPlayerComplete.first;
-        await _listenForName();
-    }
-  }
-
-  Future<void> _listenForGuardianPhoneNumber() async {
-    _guardianPhoneNumber = await _waitForSpeechResult();
-    if (_guardianPhoneNumber.isNotEmpty) {
-      _startStep(3);
-    } else {
-final player = await AudioHelper.playAssetSound('assets/sounds/DidNotHearHheOfficialsPhoneNumber.mp3');
-        await player.onPlayerComplete.first;
-        await _listenForGuardianPhoneNumber();
-    }
-  }
-
-  Future<void> _enrollVoice() async {
-    setState(() {
-      _voiceIdStatus = 'جاري تسجيل الصوت...';
-    });
-
+  Future<void> _checkPhoneExists() async {
+    setState(() => _stepIndex = 0);
     try {
-      final String result = await voiceIdChannel.invokeMethod('enrollVoice');
-      if (result == "Voice enrolled successfully") {
-        setState(() {
-          _voiceIdStatus = 'تم تسجيل الصوت بنجاح';
-        });
-final player = await AudioHelper.playAssetSound('assets/sounds/YourVoiceHasBeenSuccessfullyRecorded.mp3');
-        await player.onPlayerComplete.first;
-        _completeRegistration();
-      } else if (result == "Voice already enrolled") {
-        setState(() {
-          _voiceIdStatus = 'الصوت مسجل مسبقًا';
-        });
-final player = await AudioHelper.playAssetSound('assets/sounds/YourVoiceIsPre-Recorded.mp3');
-        await player.onPlayerComplete.first;
-        _completeRegistration();
+      final q = await _firestore
+          .collection('users')
+          .where('phone', isEqualTo: _phoneNumber)
+          .limit(1)
+          .get();
+      if (q.docs.isNotEmpty) {
+        final player = await AudioHelper.playAssetSound('assets/sounds/There is an account with this number you will be transferred to log in.mp3');
+      await player.onPlayerComplete.first;
+        Navigator.pushReplacement(
+            context, MaterialPageRoute(builder: (_) => const LoginScreen()));
       } else {
-        setState(() {
-          _voiceIdStatus = 'فشل التسجيل، حاول مرة أخرى';
-        });
-final player = await AudioHelper.playAssetSound('assets/sounds/RegistrationFailed.mp3');
-        await player.onPlayerComplete.first;
-        await _enrollVoice(); // إعادة المحاولة
+final player = await AudioHelper.playAssetSound('assets/sounds/New number Authentication code will be sent.mp3');
+      await player.onPlayerComplete.first;
+      _startOtpFlow();
       }
-    } catch (e) {
-      setState(() {
-        _voiceIdStatus = 'خطأ: $e';
-      });
-final player = await AudioHelper.playAssetSound('assets/sounds/AnErrorOccurred.mp3');
-        await player.onPlayerComplete.first;
-        await _enrollVoice();
+    } catch (_) {
+final p = await AudioHelper.playAssetSound('assets/sounds/Sorry but I didnt understand you well Could you repeat that.mp3');
+      await p.onPlayerComplete.first;
+       _askForPhone();
     }
   }
 
-  Future<void> _completeRegistration() async {
-final player = await AudioHelper.playAssetSound('assets/sounds/RegistrationHasBeenCompletedSuccessfully.mp3');
-        await player.onPlayerComplete.first;
-        setState(() {
-      _registrationCompleted = true;
-    });
+  Future<void> _startOtpFlow() async {
+    _resendAttempts = 0;
+    _auth.verifyPhoneNumber(
+      phoneNumber: _phoneNumber,
+      timeout: const Duration(seconds: 60),
+      verificationCompleted: (cred) async {
+        await _auth.signInWithCredential(cred);
+        _onOtpVerified();
+      },
+      verificationFailed: (e) async {
+        print('OTP Error: ${e.message}');
+        _resendAttempts++;
+final player = await AudioHelper.playAssetSound('assets/sounds/Failed to send code Please try again later.mp3');
+      await player.onPlayerComplete.first;
 
-    await Future.delayed(const Duration(seconds: 2));
+      if (_resendAttempts < 3) _startOtpFlow();
+        else _askForPhone();
+      },
+      codeSent: (verId, _) async {
+        _verificationId = verId;
+final player = await AudioHelper.playAssetSound('assets/sounds/Verification code has been sent Please wait a moment.mp3');
+      await player.onPlayerComplete.first;
+      await Future.delayed(const Duration(seconds: 4));
+        _askForOtpManualEntry();
+      },
+      codeAutoRetrievalTimeout: (_) {},
+    );
+  }
 
-    if (mounted) {
-      Navigator.of(context).pushReplacement(
-        MaterialPageRoute(builder: (context) => const LoginScreen()),
-      );
+  Future<void> _askForOtpManualEntry() async {
+final player = await AudioHelper.playAssetSound('assets/sounds/Now enter the voice verification code.mp3');
+      await player.onPlayerComplete.first;
+       String code = (await _waitForSpeechResult()).replaceAll(' ', '').trim();
+    if (code.length != 6) {
+final player = await AudioHelper.playAssetSound('assets/sounds/The code must consist of 6 numbers.mp3');
+      await player.onPlayerComplete.first;
+      return _askForOtpManualEntry();
     }
+    try {
+      final cred = PhoneAuthProvider.credential(
+          verificationId: _verificationId!, smsCode: code);
+      await _auth.signInWithCredential(cred);
+      _onOtpVerified();
+    } catch (_) {
+final player = await AudioHelper.playAssetSound('assets/sounds/This code is incorrect or expired Please try again later.mp3');
+      await player.onPlayerComplete.first;
+      _askForPhone();
+    }
+  }
+
+  Future<void> _onOtpVerified() async {
+    await _firestore
+        .collection('users')
+        .doc(_phoneNumber)
+        .set({'phone': _phoneNumber});
+final player = await AudioHelper.playAssetSound('assets/sounds/Verified successfully.mp3');
+      await player.onPlayerComplete.first;
+      _askForName();
+  }
+
+  Future<void> _askForName() async {
+    setState(() => _stepIndex = 1);
+final player = await AudioHelper.playAssetSound('assets/sounds/EnterPleaseYourName.mp3');
+          await player.onPlayerComplete.first;
+          _name = (await _waitForSpeechResult()).trim();
+    await _firestore
+        .collection('users')
+        .doc(_phoneNumber)
+        .update({'name': _name});
+    _askGuardianPhoneOption();
+  }
+
+  Future<void> _askGuardianPhoneOption() async {
+    setState(() => _stepIndex = 2);
+   final player = await AudioHelper.playAssetSound('assets/sounds/Do you want to use the default 911 number or the official spokesperson number.mp3');
+      await player.onPlayerComplete.first;
+    String ans = (await _waitForSpeechResult()).toLowerCase();
+    if (ans.contains('افتراضي') || ans.contains('٩١١')) {
+      _guardianPhoneNumber = '911';
+    } else {
+ final player = await AudioHelper.playAssetSound('assets/sounds/EnterYourSupervisorsPhoneNumber.mp3');
+          await player.onPlayerComplete.first;
+          String sp = (await _waitForSpeechResult())
+          .replaceAll(' ', '')
+          .trim();
+      if (!_validatePhoneFormat(sp)) return _askGuardianPhoneOption();
+      _guardianPhoneNumber = '+962${sp.substring(1)}';
+    }
+    await _firestore
+        .collection('users')
+        .doc(_phoneNumber)
+        .update({'guardian_phone': _guardianPhoneNumber});
+    _askForVoiceId();
+  }
+
+Future<void> _askForVoiceId() async {
+  setState(() => _stepIndex = 3);
+  final player = await AudioHelper.playAssetSound('assets/sounds/RecordYourVoiceID.mp3');
+  await player.onPlayerComplete.first;
+
+  try {
+    String res = await _voiceIdChannel.invokeMethod('enrollVoice');
+    if (res == 'Voice enrolled successfully') {
+      _voiceIdStatus = 'تم تسجيل الصوت بنجاح';
+      final player = await AudioHelper.playAssetSound('assets/sounds/YourVoiceHasBeenSuccessfullyRecorded.mp3');
+      await player.onPlayerComplete.first;
+    } else if (res == 'Voice already enrolled') {
+      _voiceIdStatus = 'الصوت مسجل مسبقًا';
+      final player = await AudioHelper.playAssetSound('assets/sounds/YourVoiceIsPre-Recorded.mp3');
+      await player.onPlayerComplete.first;
+    } else {
+      _voiceIdStatus = 'فشل التسجيل';
+      final player = await AudioHelper.playAssetSound('assets/sounds/RegistrationFailed.mp3');
+      await player.onPlayerComplete.first;
+    }
+    //  هنا يتم حفظ حالة الصوت في قاعدة البيانات
+    await _firestore
+        .collection('users')
+        .doc(_phoneNumber)
+        .update({'voice_id_status': _voiceIdStatus});
+
+    await _ttsService.speak(_voiceIdStatus);
+    _finishRegistration();
+  } catch (e) {
+    _voiceIdStatus = 'خطأ أثناء التسجيل';
+    final player = await AudioHelper.playAssetSound('assets/sounds/AnErrorOccurred.mp3');
+    await player.onPlayerComplete.first;
+    _askForVoiceId();
+  }
+}
+
+  Future<void> _finishRegistration() async {
+    final player = await AudioHelper.playAssetSound('assets/sounds/RegistrationHasBeenCompletedSuccessfully.mp3',);
+    await player.onPlayerComplete.first;
+    setState(() => _registrationComplete = true);
+    await Future.delayed(const Duration(seconds: 2));
+    if (!mounted) return;
+    Navigator.pushReplacement(
+        context, MaterialPageRoute(builder: (_) => const MainScreen()));
   }
 
   Future<String> _waitForSpeechResult() async {
-    const maxDuration = Duration(seconds: 10);
-    const checkInterval = Duration(milliseconds: 150);
-    final startTime = DateTime.now();
-    String lastResult = '';
-
+    const maxDur = Duration(seconds: 8);
+    const interval = Duration(milliseconds: 150);
+    final start = DateTime.now();
+    String last = '';
     await _sttService.startListening();
-
-    while (DateTime.now().difference(startTime) < maxDuration) {
-      if (_sttService.lastWords.isNotEmpty) {
-        lastResult = _sttService.lastWords;
-      }
-      await Future.delayed(checkInterval);
+    while (DateTime.now().difference(start) < maxDur) {
+      if (_sttService.lastWords.isNotEmpty) last = _sttService.lastWords;
+      await Future.delayed(interval);
     }
-
     await _sttService.stopListening();
-    return lastResult;
+    return last;
   }
 
-  @override
-  void dispose() {
-    _sttService.stopListening();
-    _ttsService.stop();
-    super.dispose();
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    return Column(
-      children: [
-        Stepper(
-          currentStep: _currentStep,
-          onStepTapped: (index) {
-            if (_registrationCompleted) {
-              setState(() {
-                _currentStep = index;
-              });
-            }
-          },
-          steps: <Step>[
-            Step(
-              title: const Text('رقم الهاتف', style: TextStyle(color: Colors.white)),
-              content: Text(
-                _phoneNumber.isEmpty ? 'في انتظار الرقم...' : _phoneNumber,
-                style: const TextStyle(color: Colors.white),
-              ),
-              isActive: _currentStep >= 0,
-              state: _phoneNumber.isNotEmpty ? StepState.complete : StepState.indexed,
-            ),
-            Step(
-              title: const Text('الاسم', style: TextStyle(color: Colors.white)),
-              content: Text(
-                _name.isEmpty ? 'في انتظار الاسم...' : _name,
-                style: const TextStyle(color: Colors.white),
-              ),
-              isActive: _currentStep >= 1,
-              state: _name.isNotEmpty ? StepState.complete : StepState.indexed,
-            ),
-            Step(
-              title: const Text('رقم هاتف المسؤول', style: TextStyle(color: Colors.white)),
-              content: Text(
-                _guardianPhoneNumber.isEmpty ? 'في انتظار الرقم...' : _guardianPhoneNumber,
-                style: const TextStyle(color: Colors.white),
-              ),
-              isActive: _currentStep >= 2,
-              state: _guardianPhoneNumber.isNotEmpty ? StepState.complete : StepState.indexed,
-            ),
-            Step(
-              title: const Text('تسجيل الصوت', style: TextStyle(color: Colors.white)),
-              content: Text(
-                _voiceIdStatus.isEmpty ? 'في انتظار التسجيل...' : _voiceIdStatus,
-                style: const TextStyle(color: Colors.white),
-              ),
-              isActive: _currentStep >= 3,
-              state: _voiceIdStatus == 'تم تسجيل الصوت بنجاح' || _voiceIdStatus == 'الصوت مسجل مسبقًا' ? StepState.complete : StepState.indexed,
-            ),
+ @override
+Widget build(BuildContext context) {
+  return Scaffold(
+    body: Container(
+      width: double.infinity,
+      height: double.infinity,
+      decoration: const BoxDecoration(
+        gradient: LinearGradient(
+          begin: Alignment.topCenter,
+          end: Alignment.bottomCenter,
+          colors: [
+            Color(0xFF0A286D), // ConstValue.color1
+            Color(0xFF151922), // ConstValue.color2
           ],
         ),
-        const SizedBox(height: 20),
-        Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 20),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              if (_phoneNumber.isNotEmpty)
-                Text("رقم الهاتف: $_phoneNumber", style: const TextStyle(color: Colors.white)),
-              if (_name.isNotEmpty)
-                Text("الاسم: $_name", style: const TextStyle(color: Colors.white)),
-              if (_guardianPhoneNumber.isNotEmpty)
-                Text("رقم المسؤول: $_guardianPhoneNumber", style: const TextStyle(color: Colors.white)),
-              if (_voiceIdStatus.isNotEmpty)
-                Text("حالة الصوت: $_voiceIdStatus", style: const TextStyle(color: Colors.white)),
-            ],
+      ),
+      child: SafeArea(
+        child: SingleChildScrollView(
+          child: Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 20),
+            child: Column(
+              children: [
+                const SizedBox(height: 10),
+
+                Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 14),
+                  decoration: BoxDecoration(
+                    color: Colors.white.withOpacity(0.05),
+                    borderRadius: BorderRadius.circular(20),
+                    border: Border.all(color: Colors.white24, width: 1),
+                    boxShadow: [
+                      BoxShadow(
+                        color: Colors.black26,
+                        blurRadius: 8,
+                        offset: Offset(0, 4),
+                      ),
+                    ],
+                  ),
+                  child: Row(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: const [
+                      Icon(Icons.person_add_alt_1, color: Colors.white, size: 28),
+                      SizedBox(width: 10),
+                      Text(
+                        "Create a new account",
+                        style: TextStyle(
+                          fontSize: 24,
+                          fontWeight: FontWeight.w700,
+                          color: Colors.white,
+                          letterSpacing: 1.2,
+                          shadows: [
+                            Shadow(
+                              color: Colors.black38,
+                              offset: Offset(1, 1),
+                              blurRadius: 2,
+                            ),
+                          ],
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+
+                const SizedBox(height: 30),
+
+
+                Stepper(
+                  currentStep: _stepIndex.clamp(0, 3),
+                  steps: [
+                    Step(
+                      title: const Text('التحقق من رقم الهاتف',
+                          style: TextStyle(color: Colors.white)),
+                      content: Text(
+                          _phoneNumber.isEmpty ? '...' : _phoneNumber,
+                          style: const TextStyle(color: Colors.white)),
+                      state: _stepIndex > 0
+                          ? StepState.complete
+                          : StepState.indexed,
+                    ),
+                    Step(
+                      title: const Text('اسم المستخدم',
+                          style: TextStyle(color: Colors.white)),
+                      content:
+                          Text(_name.isEmpty ? '...' : _name,
+                              style: const TextStyle(color: Colors.white)),
+                      state: _stepIndex > 1
+                          ? StepState.complete
+                          : StepState.indexed,
+                    ),
+                    Step(
+                      title: const Text('رقم المسؤول',
+                          style: TextStyle(color: Colors.white)),
+                      content: Text(
+                          _guardianPhoneNumber.isEmpty
+                              ? '...' : _guardianPhoneNumber,
+                          style: const TextStyle(color: Colors.white)),
+                      state: _stepIndex > 2
+                          ? StepState.complete
+                          : StepState.indexed,
+                    ),
+                    Step(
+                      title: const Text('تسجيل الصوت',
+                          style: TextStyle(color: Colors.white)),
+                      content: Text(
+                          _voiceIdStatus.isEmpty
+                              ? 'جارٍ التسجيل...' : _voiceIdStatus,
+                          style: const TextStyle(color: Colors.white)),
+                      state: _voiceIdStatus.contains('تم')
+                          ? StepState.complete
+                          : StepState.indexed,
+                    ),
+                  ],
+                ),
+              ],
+            ),
           ),
         ),
-      ],
-    );
-  }
+      ),
+    ),
+  );
+ }
 }
