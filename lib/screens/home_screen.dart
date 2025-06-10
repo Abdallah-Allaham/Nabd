@@ -15,7 +15,9 @@ import 'package:image/image.dart' as img;
 
 class HomeScreen extends StatefulWidget {
   final bool openCamera;
-  const HomeScreen({Key? key, required this.openCamera}) : super(key: key);
+  final VoidCallback? playHomePageSound;
+
+  const HomeScreen({Key? key, required this.openCamera, this.playHomePageSound}) : super(key: key);
 
   @override
   State<HomeScreen> createState() => _HomeScreenState();
@@ -27,7 +29,6 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
   late Animation<double> _avatarSizeAnim;
   late Animation<double> _avatarPositionAnim;
 
-  // هذا المتغير يتحكم بإظهار أو إخفاء الأفاتار بعد انتهاء الرسوم
   bool _showAvatar = true;
 
   final TTSService _ttsService = TTSService();
@@ -50,7 +51,6 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
     super.initState();
     _initAvatar();
 
-    // إذا طلب فتح الكاميرا من الداخل، نشغّل البث بعد الإطار الأول
     if (widget.openCamera) {
       WidgetsBinding.instance.addPostFrameCallback((_) => _openAndStream());
     }
@@ -63,7 +63,7 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
 
     _avatarPositionAnim = Tween<double>(
       begin: screenHeight / 2 - 90,
-      end: screenHeight + 100, // يجعله يختفي أسفل الشاشة
+      end: screenHeight + 100,
     ).animate(
       CurvedAnimation(parent: _avatarAnimController, curve: Curves.easeInOut),
     );
@@ -99,7 +99,6 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
       CurvedAnimation(parent: _avatarAnimController, curve: Curves.easeInOut),
     );
 
-    // نحدد قيمة أولية مؤقتة، ثم ستُحدَّث في didChangeDependencies
     _avatarPositionAnim = Tween<double>(begin: 0, end: 0).animate(_avatarAnimController);
 
     _avatarController = VideoPlayerController.asset('assets/videos/avatar_video.mp4');
@@ -107,7 +106,6 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
     _avatarController.setLooping(true);
     _avatarController.play();
 
-    // عندما تنتهي رسوم الأفاتار، نخفيه تمامًا
     _avatarAnimController.addStatusListener((status) {
       if (status == AnimationStatus.completed) {
         setState(() => _showAvatar = false);
@@ -121,9 +119,7 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
     await _sttService.stopListening();
     await _ttsService.stop();
 
-    // نشغّل الأنيميشن الذي يصغر الأفاتار ويحركه للأسفل
     await _avatarAnimController.forward();
-    await _ttsService.speak("تم فتح الكاميرا");
 
     if (!await Permission.camera.request().isGranted) return;
 
@@ -135,7 +131,6 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
 
     setState(() {
       _showCamera = true;
-      // نوقف الفيديو عند فتح الكاميرا
       _avatarController.pause();
     });
 
@@ -143,7 +138,6 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
       Uri.parse('ws://192.168.137.1:8000/process_realtime_classify/'),
     );
     _channelSub = _channel!.stream.listen(_onMessage, onError: (e) {
-      // يمكن إضافة معالجة الأخطاء هنا إن أردت
     });
 
     _cameraController!.startImageStream((camImg) async {
@@ -213,7 +207,6 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
           _capturedImage = bytes;
         });
       } catch (_) {
-        // تجاهل الأخطاء هنا
       }
     }
 
