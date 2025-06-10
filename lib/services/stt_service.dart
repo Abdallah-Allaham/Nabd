@@ -6,17 +6,30 @@ class STTService {
   String _lastWords = '';
 
   String get lastWords => _lastWords;
+  bool get isListening => _speech.isListening;
+
+  bool get isSpeechEnabled => _speechEnabled;
 
   Future<bool> initSpeech() async {
-    _speechEnabled = await _speech.initialize();
+    if (_speechEnabled && _speech.isAvailable) {
+      return true;
+    }
+    _speechEnabled = await _speech.initialize(
+      onError: (errorNotification) {
+        print("STT Error: ${errorNotification.errorMsg}, Permanent: ${errorNotification.permanent}");
+        if (errorNotification.permanent) {
+          _speechEnabled = false;
+        }
+      },
+      onStatus: (status) {
+        print("STT Status: $status");
+      },
+    );
     return _speechEnabled;
   }
 
   Future<void> startListening() async {
-    if (!_speechEnabled) {
-      await initSpeech();
-    }
-    if (_speechEnabled) {
+    if (!isListening && _speechEnabled) {
       _lastWords = '';
       await _speech.listen(
         onResult: (result) {
@@ -25,14 +38,22 @@ class STTService {
         pauseFor: const Duration(seconds: 2),
         localeId: 'ar_SA',
       );
+    } else if (!_speechEnabled) {
+      print("STT service is not enabled, cannot start listening.");
     }
   }
 
   Future<void> stopListening() async {
-    await _speech.stop();
+    if (isListening) {
+      await _speech.stop();
+    }
   }
 
   void clearLastWords() {
     _lastWords = '';
+  }
+
+  void dispose() {
+    _speech.cancel();
   }
 }

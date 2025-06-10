@@ -30,8 +30,6 @@ class _SettingScreenState extends State<SettingScreen> {
     final player = await AudioHelper.playAssetSound('assets/sounds/IWentToSettings.mp3');
     await player.onPlayerComplete.first;
     await Future.delayed(const Duration(milliseconds: 500));
-    await _sttService.initSpeech();
-    await _sttService.startListening();
   }
 
   Future<void> _changeVoiceId() async {

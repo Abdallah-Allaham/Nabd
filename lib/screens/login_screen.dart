@@ -42,9 +42,23 @@ class _LoginScreenState extends State<LoginScreen> {
   Future<void> _checkIfAlreadyLoggedIn() async {
     final hasLogged = SharedPreferencesHelper.instance.getHasLoggedIn();
     if (hasLogged) {
+      await _playRequestFingerprintSound();
       _authenticateBiometric();
     } else {
       _initializeServices();
+    }
+  }
+
+  Future<void> _playRequestFingerprintSound() async {
+    try {
+      final player = await AudioHelper.playAssetSound(
+        'assets/sounds/FingerPrint.mp3',
+      );
+      await player.onPlayerComplete.first;
+      print("Fingerprint request sound played successfully.");
+    } catch (e) {
+      print("ERROR: Failed to play fingerprint request sound: $e");
+      await _ttsService.speak("من فضلكْ أُبصم لتسجيل الدخولْ.");
     }
   }
 
@@ -61,7 +75,7 @@ class _LoginScreenState extends State<LoginScreen> {
           options: const AuthenticationOptions(
             biometricOnly: true,
             stickyAuth: true,
-            useErrorDialogs: false,
+            useErrorDialogs: true,
           ),
         );
         if (didAuth && mounted) {
@@ -177,12 +191,12 @@ class _LoginScreenState extends State<LoginScreen> {
       _confirmingPhone = true;
     });
 
-final p1 = await AudioHelper.playAssetSound('assets/sounds/YouSaid.mp3');
-await p1.onPlayerComplete.first;
+    final p1 = await AudioHelper.playAssetSound('assets/sounds/YouSaid.mp3');
+    await p1.onPlayerComplete.first;
 
-await _ttsService.speak(_rawPhoneInput);
-final p2 = await AudioHelper.playAssetSound('assets/sounds/IsThisYourCorrectNumber.mp3');
-await p2.onPlayerComplete.first;
+    await _ttsService.speak(_rawPhoneInput);
+    final p2 = await AudioHelper.playAssetSound('assets/sounds/IsThisYourCorrectNumber.mp3');
+    await p2.onPlayerComplete.first;
     await Future.delayed(const Duration(milliseconds: 200));
     _listenForPhoneConfirmation();
   }
@@ -193,7 +207,7 @@ await p2.onPlayerComplete.first;
 
     if (answer.contains('نعم')|| answer.contains('عندي')|| answer.contains('يوجد')|| answer.contains('yes')) {
       _checkPhoneInFirestore();
-  } else if (answer.contains('لا')|| answer.contains('ما عندي')|| answer.contains('لا يوجد')|| answer.contains('no')) {
+    } else if (answer.contains('لا')|| answer.contains('ما عندي')|| answer.contains('لا يوجد')|| answer.contains('no')) {
       final p = await AudioHelper.playAssetSound('assets/sounds/Please re-enter your phone number again.mp3');
       await p.onPlayerComplete.first;
       _askForPhoneNumber();
@@ -241,14 +255,14 @@ await p2.onPlayerComplete.first;
         _navigateToMain();
       },
       verificationFailed: (FirebaseAuthException e) async {
-final player = await AudioHelper.playAssetSound('assets/sounds/Failed to send code Please try again later.mp3');
-      await player.onPlayerComplete.first;
-      _askForPhoneNumber();
+        final player = await AudioHelper.playAssetSound('assets/sounds/Failed to send code Please try again later.mp3');
+        await player.onPlayerComplete.first;
+        _askForPhoneNumber();
       },
       codeSent: (String verificationId, int? resendToken) async {
-final player = await AudioHelper.playAssetSound('assets/sounds/Verification code has been sent Please enter it now.mp3');
-      await player.onPlayerComplete.first;
-      String code = await _waitForSpeechResult();
+        final player = await AudioHelper.playAssetSound('assets/sounds/Verification code has been sent Please enter it now.mp3');
+        await player.onPlayerComplete.first;
+        String code = await _waitForSpeechResult();
         code = code.replaceAll(' ', '').trim();
 
         try {
@@ -260,14 +274,14 @@ final player = await AudioHelper.playAssetSound('assets/sounds/Verification code
           await SharedPreferencesHelper.instance.setHasLoggedIn(true);
           _navigateToMain();
         } catch (e) {
-final player = await AudioHelper.playAssetSound('assets/sounds/The code is incorrect Please try again.mp3');
-      await player.onPlayerComplete.first;
-       _sendOTPAndVerify();
+          final player = await AudioHelper.playAssetSound('assets/sounds/The code is incorrect Please try again.mp3');
+          await player.onPlayerComplete.first;
+          _sendOTPAndVerify();
         }
       },
       codeAutoRetrievalTimeout: (String verificationId) async {
-final player = await AudioHelper.playAssetSound('assets/sounds/The code has timed out Please try again later.mp3');
-      await player.onPlayerComplete.first;
+        final player = await AudioHelper.playAssetSound('assets/sounds/The code has timed out Please try again later.mp3');
+        await player.onPlayerComplete.first;
       },
     );
   }
@@ -338,89 +352,86 @@ final player = await AudioHelper.playAssetSound('assets/sounds/The code has time
     super.dispose();
   }
 
-@override
-Widget build(BuildContext context) {
-  return Scaffold(
-    body: Container(
-      width: double.infinity,
-      height: double.infinity,
-      decoration: const BoxDecoration(
-        gradient: LinearGradient(
-          begin: Alignment.topCenter,
-          end: Alignment.bottomCenter,
-          colors: [
-            Color(0xFF0A286D), // ConstValue.color1
-            Color(0xFF151922), // ConstValue.color2
-          ],
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      body: Container(
+        width: double.infinity,
+        height: double.infinity,
+        decoration: const BoxDecoration(
+          gradient: LinearGradient(
+            begin: Alignment.topCenter,
+            end: Alignment.bottomCenter,
+            colors: [
+              Color(0xFF0A286D),
+              Color(0xFF151922),
+            ],
+          ),
         ),
-      ),
-      child: SafeArea(
-        child: Center(
-          child: Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 24.0),
-            child: Column(
-              mainAxisAlignment: MainAxisAlignment.center,
-              children: [
-                // شعار رمزي
-                Container(
-                  height: 120,
-                  width: 120,
-                  decoration: BoxDecoration(
-                    color: Colors.white24,
-                    shape: BoxShape.circle,
-                  ),
-                  child: Center(
-                    child: Icon(
-                      Icons.hearing, // أيقونة قابلة للتبديل
-                      size: 60,
-                      color: Colors.white,
+        child: SafeArea(
+          child: Center(
+            child: Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 24.0),
+              child: Column(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  Container(
+                    height: 120,
+                    width: 120,
+                    decoration: BoxDecoration(
+                      color: Colors.white24,
+                      shape: BoxShape.circle,
+                    ),
+                    child: Center(
+                      child: Icon(
+                        Icons.hearing,
+                        size: 60,
+                        color: Colors.white,
+                      ),
                     ),
                   ),
-                ),
-                const SizedBox(height: 30),
+                  const SizedBox(height: 30),
 
-                Text(
-                  'تطبيق نبض',
-                  style: TextStyle(
+                  Text(
+                    'تطبيق نبض',
+                    style: TextStyle(
+                      color: Colors.white,
+                      fontSize: 28,
+                      fontWeight: FontWeight.bold,
+                      letterSpacing: 1.2,
+                    ),
+                  ),
+                  const SizedBox(height: 12),
+
+                  Text(
+                    'مساعدك الصوتي الذكي للمكفوفين',
+                    style: TextStyle(
+                      color: Colors.grey[300],
+                      fontSize: 16,
+                    ),
+                    textAlign: TextAlign.center,
+                  ),
+                  const SizedBox(height: 40),
+
+                  CircularProgressIndicator(
                     color: Colors.white,
-                    fontSize: 28,
-                    fontWeight: FontWeight.bold,
-                    letterSpacing: 1.2,
+                    strokeWidth: 3,
                   ),
-                ),
-                const SizedBox(height: 12),
+                  const SizedBox(height: 40),
 
-                // جملة ترحيبية
-                Text(
-                  'مساعدك الصوتي الذكي للمكفوفين',
-                  style: TextStyle(
-                    color: Colors.grey[300],
-                    fontSize: 16,
+                  Text(
+                    'جارٍ التحقق من الحساب...',
+                    style: TextStyle(
+                      color: Colors.grey[400],
+                      fontSize: 14,
+                    ),
                   ),
-                  textAlign: TextAlign.center,
-                ),
-                const SizedBox(height: 40),
-
-                // أنيميشن تحميل
-                CircularProgressIndicator(
-                  color: Colors.white,
-                  strokeWidth: 3,
-                ),
-                const SizedBox(height: 40),
-
-                Text(
-                  'جارٍ التحقق من الحساب...',
-                  style: TextStyle(
-                    color: Colors.grey[400],
-                    fontSize: 14,
-                  ),
-                ),
-              ],
+                ],
+              ),
             ),
           ),
         ),
       ),
-    ),
-  );
+    );
   }
 }

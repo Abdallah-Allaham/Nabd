@@ -349,20 +349,22 @@ Widget build(BuildContext context) {
                     children: const [
                       Icon(Icons.person_add_alt_1, color: Colors.white, size: 28),
                       SizedBox(width: 10),
-                      Text(
-                        "Create a new account",
-                        style: TextStyle(
-                          fontSize: 24,
-                          fontWeight: FontWeight.w700,
-                          color: Colors.white,
-                          letterSpacing: 1.2,
-                          shadows: [
-                            Shadow(
-                              color: Colors.black38,
-                              offset: Offset(1, 1),
-                              blurRadius: 2,
-                            ),
-                          ],
+                      Expanded(
+                        child: Text(
+                          "Create a new account",
+                          style: TextStyle(
+                            fontSize: 20,
+                            fontWeight: FontWeight.w700,
+                            color: Colors.white,
+                            letterSpacing: 1.2,
+                            shadows: [
+                              Shadow(
+                                color: Colors.black38,
+                                offset: Offset(1, 1),
+                                blurRadius: 2,
+                              ),
+                            ],
+                          ),
                         ),
                       ),
                     ],

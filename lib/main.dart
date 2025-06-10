@@ -11,28 +11,13 @@ import 'package:permission_handler/permission_handler.dart';
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
-
-  // ————————————————
-  // 1) تحميل متغيرات البيئة (dotenv)، إذا كنت تستخدم ملف .env
   await dotenv.load(fileName: ".env");
-
-  // ————————————————
-  // 2) تهيئة SharedPreferencesHelper (مرّة واحدة)
   await SharedPreferencesHelper.instance.init();
-
-  // ————————————————
-  // 3) تهيئة Firebase (الحقيقة)
   await Firebase.initializeApp();
-
-  // (اختياري) 4) تفعيل Firebase App Check للأندرويد
-  // إذا لم ترد استخدام App Check، يمكنك حذف السطرين التاليي
   await FirebaseAppCheck.instance.activate(
     androidProvider: AndroidProvider.debug,
-    // لاحظ: في الإصدارات الإنتاجية استبدل Debug بـ PlayIntegrity أو SafetyNet
   );
 
-  // ————————————————
-  // 5) تشغيل التطبيق
   runApp(const MyApp());
 }
 
@@ -51,7 +36,6 @@ class _MyAppState extends State<MyApp> with WidgetsBindingObserver {
     super.initState();
     WidgetsBinding.instance.addObserver(this);
 
-    // عند بدء التطبيق، نفعل الصلاحيات والخدمات الأساسية
     _requestBatteryIgnorePermission();
     _requestOverlayPermission();
     _checkAccessibilityPermission();
@@ -67,8 +51,6 @@ class _MyAppState extends State<MyApp> with WidgetsBindingObserver {
     }
   }
 
-  // ————————————————
-  // خدمات Foreground Service (Native Android)
   Future<void> _startService() async {
     try {
       await platform.invokeMethod('startService');
@@ -85,8 +67,6 @@ class _MyAppState extends State<MyApp> with WidgetsBindingObserver {
     }
   }
 
-  // ————————————————
-  // طلب تجاوز تحسينات البطاريّة (Battery Optimization)
   Future<void> _requestBatteryIgnorePermission() async {
     try {
       await platform.invokeMethod('requestIgnoreBatteryOptimizations');
@@ -95,8 +75,6 @@ class _MyAppState extends State<MyApp> with WidgetsBindingObserver {
     }
   }
 
-  // ————————————————
-  // طلب صلاحية Overlay (للرُسوم العائمة إن استخدمتها)
   Future<void> _requestOverlayPermission() async {
     try {
       final bool isEnabled = await platform.invokeMethod('isOverlayEnabled');
@@ -108,8 +86,6 @@ class _MyAppState extends State<MyApp> with WidgetsBindingObserver {
     }
   }
 
-  // ————————————————
-  // التحقق من صلاحية الوصول إلى Accessibility (إن استخدمت خدمة إمكانية الوصول)
   Future<void> _checkAccessibilityPermission() async {
     try {
       final bool isEnabled = await platform.invokeMethod('isAccessibilityEnabled');
@@ -124,8 +100,6 @@ class _MyAppState extends State<MyApp> with WidgetsBindingObserver {
     }
   }
 
-  // ————————————————
-  // طلب صلاحية استخدام الميكروفون (STT)
   Future<void> _requestMicrophonePermission() async {
     try {
       var status = await Permission.microphone.status;
@@ -149,7 +123,6 @@ class _MyAppState extends State<MyApp> with WidgetsBindingObserver {
     super.dispose();
   }
 
-  // ————————————————
   @override
   Widget build(BuildContext context) {
     return MaterialApp(
