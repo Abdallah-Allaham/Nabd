@@ -88,7 +88,7 @@ class _MainScreenState extends State<MainScreen>
         print("Error initializing TTS with dummy sound: $e");
       }
 
-      await _speakWithControl("جاهز للمساعدة، انقر على الشاشة للتحدث.");
+      await _speakWithControl("ْجاهز للمساعدةْ، انقر على الشاشة للتحدث.");
     } else {
       await _speakWithControl("عذراً، لا يمكن بدء خدمة التعرف على الكلام. قد تحتاج لتأكيد أذونات الميكروفون.");
     }

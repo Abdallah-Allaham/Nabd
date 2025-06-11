@@ -5,6 +5,7 @@ import 'package:nabd/utils/const_value.dart';
 import 'package:nabd/services/tts_service.dart';
 import 'package:nabd/services/stt_service.dart';
 import 'package:nabd/utils/audio_helper.dart';
+import 'package:nabd/screens/editdata_screen.dart';
 
 class ProfileScreen extends StatefulWidget {
   const ProfileScreen({super.key});
@@ -57,47 +58,64 @@ class _ProfileScreenState extends State<ProfileScreen> {
   }
 
   Widget _buildInfoCard(String title, String value) {
-  return Container(
-    margin: const EdgeInsets.symmetric(vertical: 10),
-    height: 100,
-    decoration: BoxDecoration(
-      color: Colors.white.withOpacity(0.05),
-      borderRadius: BorderRadius.circular(12),
-      border: Border.all(color: Colors.white24),
-    ),
-    child: Padding(
-      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        mainAxisAlignment: MainAxisAlignment.center,
-        children: [
-          Text(
-            title,
-            style: const TextStyle(
-              color: Colors.white70,
-              fontSize: 14,
+    return Container(
+      margin: const EdgeInsets.symmetric(vertical: 10),
+      height: 100,
+      decoration: BoxDecoration(
+        color: Colors.white.withOpacity(0.05),
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: Colors.white24),
+      ),
+      child: Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            Text(
+              title,
+              style: const TextStyle(
+                color: Colors.white70,
+                fontSize: 14,
+              ),
             ),
-          ),
-          const SizedBox(height: 5),
-          Expanded(
-            child: Align(
-              alignment: Alignment.centerLeft,
-              child: Text(
-                value.isNotEmpty ? value : 'لا يوجد معلومات مدخلة',
-                style: const TextStyle(
-                  color: Colors.white,
-                  fontSize: 18,
-                  fontWeight: FontWeight.w500,
+            const SizedBox(height: 5),
+            Expanded(
+              child: Align(
+                alignment: Alignment.centerLeft,
+                child: Text(
+                  value.isNotEmpty ? value : 'لا يوجد معلومات مدخلة',
+                  style: const TextStyle(
+                    color: Colors.white,
+                    fontSize: 18,
+                    fontWeight: FontWeight.w500,
+                  ),
                 ),
               ),
             ),
-          ),
-        ],
+          ],
+        ),
       ),
-    ),
-  );
-}
+    );
+  }
 
+  Future<void> _navigateToEditScreen() async {
+    final player = await AudioHelper.playAssetSound('assets/sounds/IMovedToTheProfile.mp3');
+    await player.onPlayerComplete.first;
+
+    if (!mounted) return;
+    Navigator.push(
+      context,
+      MaterialPageRoute(
+        builder: (_) => EditDataScreen(
+          currentPhone: phone,
+          currentName: name,
+          currentGuardianPhone: guardianPhone,
+          currentVoiceIdStatus: voiceIdStatus,
+        ),
+      ),
+    );
+  }
 
   @override
   void dispose() {
@@ -137,6 +155,63 @@ class _ProfileScreenState extends State<ProfileScreen> {
             _buildInfoCard("Name", name),
             _buildInfoCard("Guardian's Phone", guardianPhone),
             _buildInfoCard("Voice ID Status", voiceIdStatus),
+
+            const SizedBox(height: 40),
+
+            // زر التعديل
+            Center(
+              child: Container(
+                width: double.infinity,
+                height: 60,
+                decoration: BoxDecoration(
+                  gradient: LinearGradient(
+                    begin: Alignment.centerLeft,
+                    end: Alignment.centerRight,
+                    colors: [
+                      Colors.blue.shade600,
+                      Colors.blue.shade800,
+                    ],
+                  ),
+                  borderRadius: BorderRadius.circular(15),
+                  boxShadow: [
+                    BoxShadow(
+                      color: Colors.blue.withOpacity(0.3),
+                      blurRadius: 10,
+                      offset: const Offset(0, 5),
+                    ),
+                  ],
+                ),
+                child: Material(
+                  color: Colors.transparent,
+                  child: InkWell(
+                    borderRadius: BorderRadius.circular(15),
+                    onTap: _navigateToEditScreen,
+                    child: const Center(
+                      child: Row(
+                        mainAxisAlignment: MainAxisAlignment.center,
+                        children: [
+                          Icon(
+                            Icons.edit,
+                            color: Colors.white,
+                            size: 24,
+                          ),
+                          SizedBox(width: 10),
+                          Text(
+                            "Edit Profile Information",
+                            style: TextStyle(
+                              color: Colors.white,
+                              fontSize: 18,
+                              fontWeight: FontWeight.w600,
+                              letterSpacing: 0.5,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ),
+                ),
+              ),
+            ),
           ],
         ),
       ),

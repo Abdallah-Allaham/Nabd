@@ -11,6 +11,7 @@ import 'package:nabd/services/tts_service.dart';
 import 'package:nabd/services/stt_service.dart';
 import 'package:web_socket_channel/io.dart';
 import 'package:web_socket_channel/web_socket_channel.dart';
+import 'package:nabd/utils/audio_helper.dart';
 import 'package:image/image.dart' as img;
 
 class HomeScreen extends StatefulWidget {
@@ -166,34 +167,45 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
     });
   }
 
-  void _onMessage(dynamic raw) {
+  void _onMessage(dynamic raw) async {
     final data = json.decode(raw as String);
     if (data['status'] == 'interval') {
       final id = data['most_common_class_id'] as int;
-      setState(() => _lastClassId = id);
-
       String directive;
+      String assetPath;
+
       switch (id) {
         case 1:
         case 0:
           directive = "حرك الكاميرا إلى اليسار أعلى قليلاً";
+          assetPath = 'assets/sounds/guide_left.mp3';
           break;
         case 2:
         case 3:
           directive = "حرك الكاميرا إلى اليمين أعلى قليلاً";
+          assetPath = 'assets/sounds/guide_right.mp3';
           break;
         case 4:
           directive = "ارفع الكاميرا قليلاً";
+          assetPath = 'assets/sounds/guide_up.mp3';
           break;
         case 5:
           directive = "ثبت الكاميرا";
+          assetPath = 'assets/sounds/guide_stable.mp3';
           _ttsService.speak(directive);
           _capturePhotoAndStop();
           return;
         default:
           directive = "وجه الكاميرا نحو النص";
+          assetPath = 'assets/sounds/guide_forward.mp3';
       }
+
+      // تشغيل الصوت المسجل ثم النطق
+      final player = await AudioHelper.playAssetSound(assetPath);
+      await player.onPlayerComplete.first;
       _ttsService.speak(directive);
+
+      setState(() => _lastClassId = id);
     }
   }
 
