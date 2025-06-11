@@ -18,13 +18,15 @@ class HomeScreen extends StatefulWidget {
   final bool openCamera;
   final VoidCallback? playHomePageSound;
 
-  const HomeScreen({Key? key, required this.openCamera, this.playHomePageSound}) : super(key: key);
+  const HomeScreen({Key? key, required this.openCamera, this.playHomePageSound})
+      : super(key: key);
 
   @override
   State<HomeScreen> createState() => _HomeScreenState();
 }
 
-class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
+class _HomeScreenState extends State<HomeScreen>
+    with TickerProviderStateMixin {
   late VideoPlayerController _avatarController;
   late AnimationController _avatarAnimController;
   late Animation<double> _avatarSizeAnim;
@@ -51,7 +53,6 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
   void initState() {
     super.initState();
     _initAvatar();
-
     if (widget.openCamera) {
       WidgetsBinding.instance.addPostFrameCallback((_) => _openAndStream());
     }
@@ -61,7 +62,6 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
   void didChangeDependencies() {
     super.didChangeDependencies();
     final screenHeight = MediaQuery.of(context).size.height;
-
     _avatarPositionAnim = Tween<double>(
       begin: screenHeight / 2 - 90,
       end: screenHeight + 100,
@@ -95,14 +95,16 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
       vsync: this,
       duration: const Duration(milliseconds: 800),
     );
+    _avatarSizeAnim =
+        Tween<double>(begin: 180, end: 80).animate(CurvedAnimation(
+          parent: _avatarAnimController,
+          curve: Curves.easeInOut,
+        ));
+    _avatarPositionAnim =
+        Tween<double>(begin: 0, end: 0).animate(_avatarAnimController);
 
-    _avatarSizeAnim = Tween<double>(begin: 180, end: 80).animate(
-      CurvedAnimation(parent: _avatarAnimController, curve: Curves.easeInOut),
-    );
-
-    _avatarPositionAnim = Tween<double>(begin: 0, end: 0).animate(_avatarAnimController);
-
-    _avatarController = VideoPlayerController.asset('assets/videos/avatar_video.mp4');
+    _avatarController =
+        VideoPlayerController.asset('assets/videos/avatar_video.mp4');
     await _avatarController.initialize();
     _avatarController.setLooping(true);
     _avatarController.play();
@@ -121,12 +123,12 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
     await _ttsService.stop();
 
     await _avatarAnimController.forward();
-
     if (!await Permission.camera.request().isGranted) return;
 
     _cameras = await availableCameras();
     if (_cameras.isEmpty) return;
-    _cameraController = CameraController(_cameras.first, ResolutionPreset.medium);
+    _cameraController =
+        CameraController(_cameras.first, ResolutionPreset.medium);
     await _cameraController!.initialize();
     await _cameraController!.setZoomLevel(_zoomLevel);
 
@@ -135,11 +137,25 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
       _avatarController.pause();
     });
 
-    _channel = IOWebSocketChannel.connect(
-      Uri.parse('ws://192.168.137.1:8000/process_realtime_classify/'),
+    // ===== WS Connection Logging =====
+    const serverIp = '192.168.85.211';
+    final uri = Uri.parse(
+        'ws://$serverIp:8000/process_realtime_classify/');
+    print('📡 [WS] Connecting to $uri');
+    _channel = IOWebSocketChannel.connect(uri);
+
+    _channelSub = _channel!.stream.listen(
+          (msg) {
+        print('📥 [WS] Received raw: $msg');
+        _onMessage(msg);
+      },
+      onError: (e) {
+        print('❌ [WS] Error: $e');
+      },
+      onDone: () {
+        print('🔌 [WS] Connection closed');
+      },
     );
-    _channelSub = _channel!.stream.listen(_onMessage, onError: (e) {
-    });
 
     _cameraController!.startImageStream((camImg) async {
       if (_isProcessing) return;
@@ -158,8 +174,11 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
         'yRowStride': camImg.planes[0].bytesPerRow,
       };
 
-      final Uint8List? jpegBytes = await compute(_convertYUV420ToJpeg, params);
+      final Uint8List? jpegBytes =
+      await compute(_convertYUV420ToJpeg, params);
       if (jpegBytes != null && _channel != null) {
+        print(
+            '📤 [WS] Sending frame (${jpegBytes.lengthInBytes} bytes)');
         _channel!.sink.add(jpegBytes);
       }
 
@@ -168,42 +187,37 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
   }
 
   void _onMessage(dynamic raw) async {
+    print('🔔 [_onMessage] raw payload: $raw');
     final data = json.decode(raw as String);
+    print('🔍 Parsed data: $data');
+
     if (data['status'] == 'interval') {
       final id = data['most_common_class_id'] as int;
-      String directive;
       String assetPath;
 
       switch (id) {
         case 1:
         case 0:
-          directive = "حرك الكاميرا إلى اليسار أعلى قليلاً";
           assetPath = 'assets/sounds/guide_left.mp3';
           break;
         case 2:
         case 3:
-          directive = "حرك الكاميرا إلى اليمين أعلى قليلاً";
           assetPath = 'assets/sounds/guide_right.mp3';
           break;
         case 4:
-          directive = "ارفع الكاميرا قليلاً";
           assetPath = 'assets/sounds/guide_up.mp3';
           break;
         case 5:
-          directive = "ثبت الكاميرا";
           assetPath = 'assets/sounds/guide_stable.mp3';
-          _ttsService.speak(directive);
           _capturePhotoAndStop();
           return;
         default:
-          directive = "وجه الكاميرا نحو النص";
           assetPath = 'assets/sounds/guide_forward.mp3';
       }
 
       // تشغيل الصوت المسجل ثم النطق
       final player = await AudioHelper.playAssetSound(assetPath);
       await player.onPlayerComplete.first;
-      _ttsService.speak(directive);
 
       setState(() => _lastClassId = id);
     }
@@ -218,8 +232,7 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
           _showCamera = false;
           _capturedImage = bytes;
         });
-      } catch (_) {
-      }
+      } catch (_) {}
     }
 
     _cameraController?.stopImageStream();
@@ -229,7 +242,8 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
     _cameraController = null;
   }
 
-  static Future<Uint8List> _convertYUV420ToJpeg(Map<String, dynamic> params) async {
+  static Future<Uint8List> _convertYUV420ToJpeg(
+      Map<String, dynamic> params) async {
     final List<Uint8List> planes = params['planes'];
     final int w = params['width'], h = params['height'];
     final int rowStride = params['rowStride'];
@@ -240,15 +254,23 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
     int idx = 0;
     for (int y = 0; y < h; y++) {
       for (int x = 0; x < w; x++) {
-        final int uvIndex = pixStride * (x >> 1) + rowStride * (y >> 1);
+        final int uvIndex =
+            pixStride * (x >> 1) + rowStride * (y >> 1);
         final int yp = planes[0][y * yRowStride + x];
         final int up = planes[1][uvIndex];
         final int vp = planes[2][uvIndex];
-        final int r = (yp + vp * 1436 / 1024 - 179).round().clamp(0, 255);
-        final int g = (yp - up * 46549 / 131072 + 44 - vp * 93604 / 131072 + 91)
+        final int r = (yp + vp * 1436 / 1024 - 179)
             .round()
             .clamp(0, 255);
-        final int b = (yp + up * 1814 / 1024 - 227).round().clamp(0, 255);
+        final int g = (yp -
+            up * 46549 / 131072 +
+            44 -
+            vp * 93604 / 131072 +
+            91)
+            .round()
+            .clamp(0, 255);
+        final int b =
+        (yp + up * 1814 / 1024 - 227).round().clamp(0, 255);
         buffer[idx++] = r;
         buffer[idx++] = g;
         buffer[idx++] = b;
@@ -259,7 +281,8 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
     idx = 0;
     for (int yy = 0; yy < h; yy++) {
       for (int xx = 0; xx < w; xx++) {
-        imgDst.setPixelRgb(xx, yy, buffer[idx], buffer[idx + 1], buffer[idx + 2]);
+        imgDst.setPixelRgb(
+            xx, yy, buffer[idx], buffer[idx + 1], buffer[idx + 2]);
         idx += 3;
       }
     }
@@ -271,14 +294,16 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
     return Container(
       decoration: BoxDecoration(
         gradient: LinearGradient(
-          begin: Alignment.topCenter, end: Alignment.bottomCenter,
+          begin: Alignment.topCenter,
+          end: Alignment.bottomCenter,
           colors: [ConstValue.color1, ConstValue.color2],
         ),
       ),
       child: Stack(
         alignment: Alignment.center,
         children: [
-          if (_showCamera && _cameraController?.value.isInitialized == true)
+          if (_showCamera &&
+              _cameraController?.value.isInitialized == true)
             Positioned.fill(
               child: FittedBox(
                 fit: BoxFit.cover,
@@ -291,17 +316,21 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
             ),
           if (_lastClassId != null)
             Positioned(
-              top: 50, left: 0, right: 0,
+              top: 50,
+              left: 0,
+              right: 0,
               child: Center(
                 child: Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                  padding: const EdgeInsets.symmetric(
+                      horizontal: 12, vertical: 6),
                   decoration: BoxDecoration(
                     color: Colors.black54,
                     borderRadius: BorderRadius.circular(8),
                   ),
                   child: Text(
                     'Class: $_lastClassId',
-                    style: const TextStyle(color: Colors.white, fontSize: 20),
+                    style:
+                    const TextStyle(color: Colors.white, fontSize: 20),
                   ),
                 ),
               ),

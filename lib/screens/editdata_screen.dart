@@ -441,20 +441,22 @@ class _EditDataScreenState extends State<EditDataScreen> {
                       children: const [
                         Icon(Icons.edit, color: Colors.white, size: 28),
                         SizedBox(width: 10),
-                        Text(
-                          "Edit Profile Information",
-                          style: TextStyle(
-                            fontSize: 24,
-                            fontWeight: FontWeight.w700,
-                            color: Colors.white,
-                            letterSpacing: 1.2,
-                            shadows: [
-                              Shadow(
-                                color: Colors.black38,
-                                offset: Offset(1, 1),
-                                blurRadius: 2,
-                              ),
-                            ],
+                        Expanded(
+                          child: Text(
+                            "Edit Profile Information",
+                            style: TextStyle(
+                              fontSize: 18,
+                              fontWeight: FontWeight.w700,
+                              color: Colors.white,
+                              letterSpacing: 1.2,
+                              shadows: [
+                                Shadow(
+                                  color: Colors.black38,
+                                  offset: Offset(1, 1),
+                                  blurRadius: 2,
+                                ),
+                              ],
+                            ),
                           ),
                         ),
                       ],
