@@ -38,7 +38,7 @@ public class PorcupainService extends Service {
     private int bufferIndex = 0;
     private boolean isRecording = false;
 
-    String apiKey = "q/DiiXIUQ5xUOFNI06Y3FuFA64EDBWo3MrZJ5tZVDI1j8K8Zp+QugA==";
+    String apiKey = "";
 
     @Override
     public void onCreate() {
