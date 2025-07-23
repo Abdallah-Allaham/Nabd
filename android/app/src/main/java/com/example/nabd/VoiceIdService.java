@@ -27,7 +27,7 @@ import io.flutter.plugin.common.MethodChannel;
 
 public class VoiceIdService {
     private static final String TAG = "VoiceIdService";
-    private static final String ACCESS_KEY = "q/DiiXIUQ5xUOFNI06Y3FuFA64EDBWo3MrZJ5tZVDI1j8K8Zp+QugA==";
+    private static final String ACCESS_KEY = "";
     private static final int SAMPLE_RATE = 16000;
     private static final int CHANNELS = AudioFormat.CHANNEL_IN_MONO;
     private static final int ENCODING = AudioFormat.ENCODING_PCM_16BIT;
